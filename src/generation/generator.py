@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
 
-# Ensure repo root is in sys.path so we can import retriever
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.retrieval.retriever import hybrid_search
@@ -17,18 +17,18 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def extract_json(text):
     """Try to extract the first balanced JSON object from text."""
-    # Remove markdown code fences if present
+    # Removing markdown code fences if present
     text = re.sub(r'```(?:json)?\s*', '', text)
     text = re.sub(r'```', '', text)
     text = text.strip()
 
-    # First try direct parse
+    # First trying direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Find first { and matching closing }
+    # Finding first { and matching closing }
     start = text.find('{')
     if start == -1:
         return None

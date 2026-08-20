@@ -3,24 +3,24 @@ import re
 from pathlib import Path
 
 def clean_text(text):
-    # Remove page numbers and repeated headers (adjust as needed)
+    # Removing page numbers and repeated headers (adjust as needed)
     text = re.sub(r'\n{3,}', '\n\n', text)           # collapse 3+ newlines
     text = re.sub(r'Contents\s*\n\s*ARTICLES\s*\([ivx]+\)', '', text)
     text = re.sub(r'\bARTICLES\b', '', text)         # remove "ARTICLES" headers
     text = re.sub(r'\bContents\b', '', text)         # remove "Contents"
-    # Remove lines that are just page numbers (simple heuristic)
+    # Removing lines that are just page numbers (simple heuristic)
     lines = [line.strip() for line in text.split('\n')]
     cleaned_lines = [line for line in lines if not re.fullmatch(r'\d{1,4}', line)]
     return '\n'.join(cleaned_lines)
 
 def chunk_constitution(text, source):
-    # Find the actual start of Article 1 using a known body phrase
+    # Finding the actual start of Article 1 using a known body phrase
     body_marker = "India, that is Bharat"
     marker_index = text.find(body_marker)
     start_pos = 0
 
     if marker_index != -1:
-        # Search backward from the marker to find the line starting with "1."
+        # Searching backward from the marker to find the line starting with "1."
         line_start = text.rfind('\n', 0, marker_index)
         while line_start != -1:
             line_end = text.find('\n', line_start + 1)
