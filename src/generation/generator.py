@@ -6,51 +6,72 @@ from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.retrieval.retriever import hybrid_search
 
 load_dotenv()
-
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def extract_json(text):
-    """Try to extract the first balanced JSON object from text."""
-    # Removing markdown code fences if present
+    """Try to extract the first balanced JSON object from text, stripping thinking blocks."""
+    # Remove thinking blocks (both closed and unclosed)
+    text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL)
     text = re.sub(r'```(?:json)?\s*', '', text)
     text = re.sub(r'```', '', text)
     text = text.strip()
 
-    # First trying direct parse
+    # Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Finding first { and matching closing }
+    # Try to find first balanced JSON object
     start = text.find('{')
-    if start == -1:
-        return None
-    depth = 0
-    for i in range(start, len(text)):
-        if text[i] == '{':
-            depth += 1
-        elif text[i] == '}':
-            depth -= 1
-            if depth == 0:
-                json_str = text[start:i+1]
-                try:
-                    return json.loads(json_str)
-                except json.JSONDecodeError:
-                    continue
+    if start != -1:
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == '{':
+                depth += 1
+            elif text[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    json_str = text[start:i+1]
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        continue
+
+    # Fallback: try to find JSON near the end (after any thinking)
+    matches = list(re.finditer(r'\{.*\}', text, re.DOTALL))
+    if matches:
+        for match in reversed(matches):
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                continue
+
     return None
 
-def generate_answer(question, top_k=5, model="qwen/qwen3.6-27b"):
+def validate_citations(parsed, results):
+    valid_citations = []
+    if parsed and "citations" in parsed and isinstance(parsed["citations"], list):
+        for c in parsed["citations"]:
+            if isinstance(c, int) and 1 <= c <= len(results):
+                valid_citations.append(c)
+            elif isinstance(c, str) and c.isdigit():
+                c_int = int(c)
+                if 1 <= c_int <= len(results):
+                    valid_citations.append(c_int)
+    parsed["citations"] = valid_citations
+    return parsed
+
+def generate_answer(question, top_k=5, model="openai/gpt-oss-20b"):
     # 1. Retrieve relevant chunks
     results = hybrid_search(question, top_k=top_k)
 
-    # 2. Build context string with numbered chunks
+    # 2. Build context string
     context_parts = []
     for i, res in enumerate(results):
         meta = res["metadata"]
@@ -68,8 +89,8 @@ def generate_answer(question, top_k=5, model="qwen/qwen3.6-27b"):
         "If the answer is not in the context, respond with exactly: Not found in provided context. "
         "When answering, cite the context numbers like [1], [2], etc. "
         "Return your response as a JSON object with keys: answer (string), citations (list of numbers), confidence (float between 0 and 1). "
-        "Do not include any text outside the JSON object."
-        "Do not hallucinate or make up information. If the context is insufficient, answer with 'Not found in provided context.'"
+        "Do not include any text outside the JSON object. "
+        "Do not hallucinate or make up information. "
         "Do not include any thinking or reasoning. Output only the JSON object."
     )
 
@@ -87,40 +108,24 @@ def generate_answer(question, top_k=5, model="qwen/qwen3.6-27b"):
             {"role": "user", "content": user_msg}
         ],
         temperature=0.0,
-        max_tokens=1024,
+        max_tokens=800,
     )
 
     content = response.choices[0].message.content
-
-    # Debug: print raw content to console (you can remove later)
     print("Raw model output:\n", content)
 
-    # 5. Parse JSON
+    # 5. Parse JSON and validate
     parsed = extract_json(content)
-    parsed = validate_citations(parsed, results)
-
     if parsed is None:
-        # Fallback: return raw text as answer, no citations
         parsed = {
             "answer": content.strip(),
             "citations": [],
             "confidence": 0.0
         }
+    else:
+        parsed = validate_citations(parsed, results)
 
     return parsed, results
-
-def validate_citations(parsed, results):
-    valid_citations = []
-    if "citations" in parsed and isinstance(parsed["citations"],list):
-        for c in parsed["citations"]:
-            if isinstance(c, int) and 1 <= c <= len(results):
-                valid_citations.append(c)
-            elif isinstance(c, str) and c.isdigit():
-                c_int = int(c)
-                if 1 <= c_int <= len(results):
-                    valid_citations.append(c_int)
-    parsed["citations"] = valid_citations
-    return parsed
 
 if __name__ == "__main__":
     question = input("Enter your legal question: ")

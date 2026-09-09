@@ -14,6 +14,7 @@ def main():
     chunks_file = Path("data/processed/chunks.jsonl")
     db_path = Path("data/vector_db")
     collection_name = "legal_chunks"
+    batch_size = 5000  # below Chroma's max batch size
 
     # Load chunks
     chunks = load_chunks(chunks_file)
@@ -34,21 +35,26 @@ def main():
 
     # Initialize Chroma
     client = chromadb.PersistentClient(path=str(db_path))
-    # Delete existing collection if exists to avoid duplicates (optional)
     try:
         client.delete_collection(collection_name)
+        print(f"Deleted existing collection '{collection_name}'.")
     except:
         pass
     collection = client.create_collection(collection_name, metadata={"hnsw:space": "cosine"})
 
-    # Add to collection
-    collection.add(
-        ids=ids,
-        embeddings=embeddings.tolist(),
-        documents=texts,
-        metadatas=metadatas
-    )
-    print(f"Stored {len(chunks)} chunks in Chroma at {db_path}")
+    # Add in batches
+    total = len(chunks)
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        print(f"Adding batch {start} to {end-1}...")
+        collection.add(
+            ids=ids[start:end],
+            embeddings=embeddings[start:end].tolist(),
+            documents=texts[start:end],
+            metadatas=metadatas[start:end]
+        )
+
+    print(f"Stored {total} chunks in Chroma at {db_path}")
 
 if __name__ == "__main__":
     main()
