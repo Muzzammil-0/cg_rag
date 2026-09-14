@@ -168,7 +168,15 @@ def get_filtered_bm25(source_fragment):
 # ----------------------------
 # Chroma + models
 # ----------------------------
-client = chromadb.PersistentClient(path="data/vector_db")
+
+import os as _os
+
+def _chroma_path():
+    if _os.getenv("SPACE_ID"):
+        return "/tmp/vector_db"
+    return "data/vector_db"
+
+client = chromadb.PersistentClient(path=_chroma_path())
 collection = client.get_collection("legal_chunks")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')

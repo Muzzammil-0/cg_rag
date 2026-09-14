@@ -67,7 +67,7 @@ def validate_citations(parsed, results):
     parsed["citations"] = valid_citations
     return parsed
 
-def generate_answer(question, top_k=5, model="openai/gpt-oss-20b"):
+def generate_answer(question, top_k=5, model="openai/gpt-oss-20b", verbose=True):
     # 1. Retrieve relevant chunks
     results = hybrid_search(question, top_k=top_k)
 
@@ -85,6 +85,7 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-20b"):
     # 3. Create prompt
     system_msg = (
         "You are a legal research assistant for Indian law and Chhattisgarh law. "
+        "Every factual claim in your answer must be directly supported by the text of the cited chunk. If a claim isn't in any retrieved chunk, do not include it. Prefer shorter answers over answers that mix retrievedand remembered information.cs"
         "Use ONLY the provided context to answer the user's question. "
         "If the answer is not in the context, respond with exactly: Not found in provided context. "
         "When answering, cite the context numbers like [1], [2], etc. "
@@ -112,7 +113,8 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-20b"):
     )
 
     content = response.choices[0].message.content
-    print("Raw model output:\n", content)
+    if verbose:
+        print("Raw model output:\n", content)
 
     # 5. Parse JSON and validate
     parsed = extract_json(content)

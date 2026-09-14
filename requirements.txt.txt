@@ -1,0 +1,16 @@
+gradio
+fastapi
+uvicorn[standard]
+pymupdf
+pdfplumber
+beautifulsoup4
+requests
+pandas
+numpy
+sentence-transformers
+chromadb
+rank_bm25
+python-dotenv
+groq
+nltk
+pydantic

@@ -1,7 +1,8 @@
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path("data/rag.db")
+import os
+DB_PATH = Path("/tmp/rag.db") if os.getenv("SPACE_ID") else Path("data/rag.db")
 
 def get_connection():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
