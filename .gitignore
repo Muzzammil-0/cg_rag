@@ -5,7 +5,7 @@ __pycache__/
 
 # Generated data — reproducible from raw + pipeline
 data/raw/
-data/processed/
+#data/processed/
 data/vector_db/
 data/rag.db*
 data/evaluation/results.json
