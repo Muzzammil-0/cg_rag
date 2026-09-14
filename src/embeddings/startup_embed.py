@@ -1,107 +1,61 @@
-import sys
-import time
 import json
+import os
 from pathlib import Path
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from src.api.models import QueryRequest, QueryResponse, RetrievedChunk, HealthResponse
-from src.generation.generator import generate_answer
-from src.storage.db import init_db, get_connection
-from src.embeddings.startup_embed import build_if_needed
+import chromadb
+from sentence_transformers import SentenceTransformer
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("Starting up...")
-    init_db()
-    print("DB initialized.")
-    build_if_needed()
-    print("Startup complete.")
-    yield
-    print("Shutting down.")
+def get_chroma_path():
+    if os.getenv("SPACE_ID"):
+        return Path("/tmp/vector_db")
+    return Path("data/vector_db")
 
 
-app = FastAPI(
-    title="CG Legal RAG",
-    description="Chhattisgarh Judicial RAG — ask legal questions, get cited answers.",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+def build_if_needed():
+    db_path = get_chroma_path()
+    chunks_file = Path("data/processed/chunks.jsonl")
 
-
-def log_query(question, answer_data, results, latency_ms):
-    """Persist one query to SQLite. Failures are non-fatal."""
-    top = results[0] if results else None
-    top_source = top["metadata"].get("source") if top else None
-    top_section = None
-    match_type = None
-    if top:
-        top_section = str(top["metadata"].get("section", top["metadata"].get("article", ""))) or None
-        match_type = top.get("match_type")
+    client = chromadb.PersistentClient(path=str(db_path))
 
     try:
-        conn = get_connection()
-        conn.execute(
-            """
-            INSERT INTO queries
-              (question, answer, citations, confidence,
-               retrieved_top_source, retrieved_top_section, match_type, latency_ms)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                question,
-                answer_data.get("answer", ""),
-                json.dumps(answer_data.get("citations", [])),
-                float(answer_data.get("confidence", 0.0)),
-                top_source,
-                top_section,
-                match_type,
-                latency_ms,
-            ),
+        collection = client.get_collection("legal_chunks")
+        if collection.count() > 0:
+            print(f"ChromaDB already built: {collection.count()} chunks")
+            return
+    except Exception:
+        pass
+
+    print("Building ChromaDB from chunks.jsonl...")
+    chunks = []
+    with open(chunks_file, "r", encoding="utf-8") as f:
+        for line in f:
+            chunks.append(json.loads(line))
+
+    print(f"Loaded {len(chunks)} chunks. Generating embeddings...")
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    texts = [c["text"] for c in chunks]
+    ids = [f"chunk_{i}" for i in range(len(chunks))]
+    metadatas = [c["metadata"] for c in chunks]
+
+    embeddings = model.encode(texts, show_progress_bar=True, batch_size=32)
+
+    try:
+        client.delete_collection("legal_chunks")
+    except Exception:
+        pass
+    collection = client.create_collection("legal_chunks", metadata={"hnsw:space": "cosine"})
+
+    batch_size = 5000
+    for start in range(0, len(chunks), batch_size):
+        end = min(start + batch_size, len(chunks))
+        collection.add(
+            ids=ids[start:end],
+            embeddings=embeddings[start:end].tolist(),
+            documents=texts[start:end],
+            metadatas=metadatas[start:end],
         )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"[log_query] failed: {e}")
+    print(f"ChromaDB built: {len(chunks)} chunks at {db_path}")
 
 
-@app.get("/health", response_model=HealthResponse)
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/query", response_model=QueryResponse)
-def query(req: QueryRequest):
-    start = time.time()
-
-    try:
-        answer_data, results = generate_answer(req.question, top_k=req.top_k, verbose=False)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
-
-    latency_ms = int((time.time() - start) * 1000)
-
-    log_query(req.question, answer_data, results, latency_ms)
-
-    retrieved = []
-    for r in results:
-        m = r.get("metadata", {})
-        retrieved.append(RetrievedChunk(
-            source=m.get("source", ""),
-            section=str(m.get("section", m.get("article", ""))) or "",
-            snippet=r.get("text", "")[:400],
-            match_type=r.get("match_type", ""),
-        ))
-
-    return QueryResponse(
-        question=req.question,
-        answer=answer_data.get("answer", ""),
-        citations=answer_data.get("citations", []),
-        confidence=float(answer_data.get("confidence", 0.0)),
-        latency_ms=latency_ms,
-        retrieved=retrieved,
-    )
+if __name__ == "__main__":
+    build_if_needed()

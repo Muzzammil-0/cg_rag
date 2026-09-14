@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.api.models import QueryRequest, QueryResponse, RetrievedChunk, HealthResponse
 from src.generation.generator import generate_answer
 from src.storage.db import init_db, get_connection
-from src.embeddings.startup_embed import build_if_needed
 
 
 @asynccontextmanager
@@ -19,7 +18,6 @@ async def lifespan(app: FastAPI):
     print("Starting up...")
     init_db()
     print("DB initialized.")
-    build_if_needed()
     print("Startup complete.")
     yield
     print("Shutting down.")
@@ -71,6 +69,11 @@ def log_query(question, answer_data, results, latency_ms):
 
 @app.get("/health", response_model=HealthResponse)
 def health():
+    return {"status": "ok"}
+
+
+@app.get("/healthz")
+def healthz():
     return {"status": "ok"}
 
 

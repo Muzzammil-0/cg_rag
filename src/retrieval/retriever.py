@@ -1,4 +1,5 @@
 import json
+import os as _os
 import re
 from pathlib import Path
 import chromadb
@@ -80,7 +81,7 @@ def extract_section_from_query(query):
     return None
 
 # ----------------------------
-# Synonym → section hints
+# Synonym hints
 # ----------------------------
 SECTION_HINTS = [
     # IPC
@@ -122,14 +123,14 @@ SECTION_HINTS = [
     ("freedom of speech", "constitution", "19"),
     ("constitutional remedies", "constitution", "32"),
     ("uniform civil code", "constitution", "44"),
+    # PESA
+    ("where does pesa apply", "pesa", "3"),
+    ("pesa applicability", "pesa", "3"),
     # CG Rent Control
     ("eviction", "Rent_Control", "12"),
     # CG Land Revenue
     ("mutation", "Land_Revenue", "109"),
     ("partition", "Land_Revenue", "178"),
-    # PESA
-    ("where does pesa apply", "pesa", "3"),
-    ("pesa applicability", "pesa", "3"),
 ]
 
 def detect_section_hint(query, source_filter):
@@ -166,24 +167,34 @@ def get_filtered_bm25(source_fragment):
     return result
 
 # ----------------------------
-# Chroma + models
+# Chroma + models (lazy collection)
 # ----------------------------
-
-import os as _os
-
 def _chroma_path():
     if _os.getenv("SPACE_ID"):
         return "/tmp/vector_db"
     return "data/vector_db"
 
 client = chromadb.PersistentClient(path=_chroma_path())
-collection = client.get_collection("legal_chunks")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
+_collection = None
+
+def get_collection():
+    """Lazy-load the Chroma collection. Builds it if missing."""
+    global _collection
+    if _collection is not None:
+        return _collection
+    try:
+        _collection = client.get_collection("legal_chunks")
+    except Exception:
+        from src.embeddings.startup_embed import build_if_needed
+        build_if_needed()
+        _collection = client.get_collection("legal_chunks")
+    return _collection
+
 ALL_SOURCES = sorted(set(c["metadata"].get("source", "") for c in chunks))
 
-# Pre-computed section map: (source_lower, section_upper) -> [chunk_ids]
 SECTION_MAP = {}
 for i, c in enumerate(chunks):
     src = c["metadata"].get("source", "").lower()
@@ -220,7 +231,7 @@ def dense_search(query, top_k=20, source_filter=None):
                 kwargs["where"] = {"source": {"$in": matching_sources}}
         else:
             return []
-    results = collection.query(**kwargs)
+    results = get_collection().query(**kwargs)
     rows = list(zip(
         results["ids"][0], results["documents"][0],
         results["metadatas"][0], results["distances"][0]
@@ -247,9 +258,6 @@ def sparse_search(query, top_k=20, source_filter=None):
         top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
         return [(f"chunk_{i}", chunks[i]["text"], chunks[i]["metadata"], scores[i]) for i in top_indices]
 
-# ----------------------------
-# RRF
-# ----------------------------
 def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
     fused_scores = {}
     for rank, (id_, _, _, _) in enumerate(dense_results):
@@ -259,9 +267,6 @@ def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
     sorted_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)
     return sorted_ids, fused_scores
 
-# ----------------------------
-# Hybrid search — section matches bypass reranking
-# ----------------------------
 def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
     if source_filter is None:
         source_filter = detect_source_filter(query)
@@ -273,20 +278,16 @@ def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
     final_results = []
     seen_ids = set()
 
-    # 1. Section matches bypass reranker — pinned at top
     if target_section:
         section_ids = find_chunks_by_section(source_filter, target_section)
         for cid in section_ids:
             if cid in seen_ids:
                 continue
-            c = next((ch for ch in chunks if f"chunk_{chunks.index(ch)}" == cid), None)
-            if c is None:
-                # fallback direct index parse
-                try:
-                    idx = int(cid.replace("chunk_", ""))
-                    c = chunks[idx]
-                except (ValueError, IndexError):
-                    continue
+            try:
+                idx = int(cid.replace("chunk_", ""))
+                c = chunks[idx]
+            except (ValueError, IndexError):
+                continue
             final_results.append({
                 "id": cid,
                 "text": c["text"],
@@ -298,7 +299,6 @@ def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
             if len(final_results) >= top_k:
                 break
 
-    # 2. Fill remaining slots with general retrieval + reranking
     if len(final_results) < top_k:
         dense_results = dense_search(query, top_k=40, source_filter=source_filter)
         sparse_results = sparse_search(query, top_k=40, source_filter=source_filter)
@@ -340,35 +340,3 @@ def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
                 })
 
     return final_results[:top_k]
-
-# ----------------------------
-# Test
-# ----------------------------
-if __name__ == "__main__":
-    test_queries = [
-        "What is the definition of theft under IPC?",
-        "What is the definition of theft under BNS?",
-        "What is the procedure for registering an FIR under CrPC?",
-        "What are the provisions for bail under CrPC?",
-        "What does Article 14 of the Indian Constitution say?",
-        "What are the rules for electronic evidence under the Evidence Act?",
-        "Who bears the burden of proof under the Indian Evidence Act?",
-        "What are the powers of the Gram Sabha under PESA?",
-        "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
-        "What is the procedure for land mutation under the Chhattisgarh Land Revenue Code?",
-    ]
-    for q in test_queries:
-        sf = detect_source_filter(q)
-        target = extract_section_from_query(q) or detect_section_hint(q, sf)
-        print(f"\n=== {q} ===")
-        print(f"  source_filter={sf}  target_section={target}")
-        if target:
-            matches = find_chunks_by_section(sf, target)
-            print(f"  section chunks found: {len(matches)}")
-        results = hybrid_search(q, top_k=3)
-        for i, r in enumerate(results):
-            m = r["metadata"]
-            sec = m.get("section", m.get("article", ""))
-            mt = r.get("match_type", "?")
-            print(f"  [{i+1}] {m.get('source')} sec={sec}  ({mt})")
-            
