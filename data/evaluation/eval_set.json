@@ -1,0 +1,444 @@
+[
+  {
+    "id": "ipc_murder",
+    "question": "What is the punishment for murder under IPC?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "302",
+    "expected_keywords": ["death", "imprisonment for life", "fine"],
+    "category": "criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "ipc_theft",
+    "question": "What is the punishment for theft under the Indian Penal Code?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "379",
+    "expected_keywords": ["three years", "fine", "imprisonment"],
+    "category": "criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "ipc_theft_def",
+    "question": "What is the definition of theft under IPC?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "378",
+    "expected_keywords": ["dishonestly", "movable property", "consent"],
+    "category": "criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "ipc_cheating",
+    "question": "What is the punishment for cheating under IPC?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "420",
+    "expected_keywords": ["imprisonment", "seven years", "fine"],
+    "category": "criminal",
+    "difficulty": "medium"
+  },
+  {
+    "id": "ipc_culpable_homicide",
+    "question": "What is culpable homicide under IPC?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "299",
+    "expected_keywords": ["death", "intention", "knowledge"],
+    "category": "criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "ipc_dacoity",
+    "question": "What is the punishment for dacoity under IPC?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "395",
+    "expected_keywords": ["imprisonment for life", "five or more", "rigorous"],
+    "category": "criminal",
+    "difficulty": "medium"
+  },
+  {
+    "id": "ipc_defamation",
+    "question": "What is the punishment for defamation under IPC?",
+    "expected_source": "IPC_eng.pdf",
+    "expected_section": "500",
+    "expected_keywords": ["simple imprisonment", "two years", "fine"],
+    "category": "criminal",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "bns_murder",
+    "question": "What is the punishment for murder under BNS?",
+    "expected_source": "BNS.pdf",
+    "expected_section": "103",
+    "expected_keywords": ["death", "imprisonment for life", "fine"],
+    "category": "criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "bns_culpable_homicide",
+    "question": "What is the punishment for culpable homicide not amounting to murder under BNS?",
+    "expected_source": "BNS.pdf",
+    "expected_section": "105",
+    "expected_keywords": ["imprisonment for life", "five years", "fine"],
+    "category": "criminal",
+    "difficulty": "medium"
+  },
+  {
+    "id": "bns_theft",
+    "question": "What is the definition of theft under BNS?",
+    "expected_source": "BNS.pdf",
+    "expected_section": "303",
+    "expected_keywords": ["dishonestly", "movable property", "consent"],
+    "category": "criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "bns_attempt_murder",
+    "question": "What is the punishment for attempt to murder under BNS?",
+    "expected_source": "BNS.pdf",
+    "expected_section": "109",
+    "expected_keywords": ["imprisonment", "ten years", "life"],
+    "category": "criminal",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "crpc_fir",
+    "question": "What is the procedure for registering an FIR under CrPC?",
+    "expected_source": "criminal_procedure",
+    "expected_section": "154",
+    "expected_keywords": ["information", "cognizable", "officer in charge"],
+    "category": "criminal_procedure",
+    "difficulty": "easy"
+  },
+  {
+    "id": "crpc_arrest",
+    "question": "When can a police officer arrest a person without a warrant under CrPC?",
+    "expected_source": "criminal_procedure",
+    "expected_section": "41",
+    "expected_keywords": ["cognizable", "reasonable", "complaint"],
+    "category": "criminal_procedure",
+    "difficulty": "medium"
+  },
+  {
+    "id": "crpc_bail",
+    "question": "What are the provisions for bail under CrPC?",
+    "expected_source": "criminal_procedure",
+    "expected_section": "436",
+    "expected_keywords": ["bail", "bailable", "non-bailable"],
+    "category": "criminal_procedure",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "bnss_fir",
+    "question": "What is the procedure for FIR registration under BNSS?",
+    "expected_source": "Bharatiya_Nagarik",
+    "expected_section": "173",
+    "expected_keywords": ["information", "cognizable", "officer"],
+    "category": "criminal_procedure",
+    "difficulty": "medium"
+  },
+  {
+    "id": "bnss_arrest",
+    "question": "When can a police officer arrest without warrant under BNSS?",
+    "expected_source": "Bharatiya_Nagarik",
+    "expected_section": "35",
+    "expected_keywords": ["cognizable", "arrest"],
+    "category": "criminal_procedure",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "const_article14",
+    "question": "What does Article 14 of the Indian Constitution say?",
+    "expected_source": "constitution",
+    "expected_section": "14",
+    "expected_keywords": ["equality", "law", "discrimination"],
+    "category": "constitutional",
+    "difficulty": "easy"
+  },
+  {
+    "id": "const_article21",
+    "question": "What is Article 21 of the Constitution about?",
+    "expected_source": "constitution",
+    "expected_section": "21",
+    "expected_keywords": ["life", "personal liberty", "procedure"],
+    "category": "constitutional",
+    "difficulty": "easy"
+  },
+  {
+    "id": "const_article19",
+    "question": "What are the fundamental rights under Article 19?",
+    "expected_source": "constitution",
+    "expected_section": "19",
+    "expected_keywords": ["speech", "expression", "assembly"],
+    "category": "constitutional",
+    "difficulty": "easy"
+  },
+  {
+    "id": "const_article32",
+    "question": "What is Article 32 of the Constitution?",
+    "expected_source": "constitution",
+    "expected_section": "32",
+    "expected_keywords": ["remedies", "writ", "Supreme Court"],
+    "category": "constitutional",
+    "difficulty": "medium"
+  },
+  {
+    "id": "const_article21a",
+    "question": "What is the right to education under the Constitution?",
+    "expected_source": "constitution",
+    "expected_section": "21A",
+    "expected_keywords": ["education", "six", "fourteen", "children"],
+    "category": "constitutional",
+    "difficulty": "easy"
+  },
+  {
+    "id": "const_article44",
+    "question": "What does Article 44 of the Constitution say about uniform civil code?",
+    "expected_source": "constitution",
+    "expected_section": "44",
+    "expected_keywords": ["uniform civil code", "citizens"],
+    "category": "constitutional",
+    "difficulty": "easy"
+  },
+
+  {
+    "id": "iea_primary_evidence",
+    "question": "What is primary evidence under the Indian Evidence Act?",
+    "expected_source": "iea_1872",
+    "expected_section": "62",
+    "expected_keywords": ["document", "inspection", "court"],
+    "category": "evidence",
+    "difficulty": "easy"
+  },
+  {
+    "id": "iea_secondary_evidence",
+    "question": "What is secondary evidence under the Indian Evidence Act?",
+    "expected_source": "iea_1872",
+    "expected_section": "63",
+    "expected_keywords": ["certified copy", "counterpart", "oral"],
+    "category": "evidence",
+    "difficulty": "medium"
+  },
+  {
+    "id": "iea_electronic",
+    "question": "What are the rules for electronic evidence under the Evidence Act?",
+    "expected_source": "iea_1872",
+    "expected_section": "65B",
+    "expected_keywords": ["electronic", "certificate", "computer"],
+    "category": "evidence",
+    "difficulty": "medium"
+  },
+  {
+    "id": "iea_burden",
+    "question": "Who bears the burden of proof under the Indian Evidence Act?",
+    "expected_source": "iea_1872",
+    "expected_section": "101",
+    "expected_keywords": ["burden", "prove", "fact"],
+    "category": "evidence",
+    "difficulty": "easy"
+  },
+
+  {
+    "id": "cpc_res_judicata",
+    "question": "What is res judicata under CPC?",
+    "expected_source": "civil_procedure",
+    "expected_section": "11",
+    "expected_keywords": ["suit", "decided", "court", "competent"],
+    "category": "civil",
+    "difficulty": "medium"
+  },
+  {
+    "id": "cpc_res_sub_judice",
+    "question": "What is res sub judice under CPC?",
+    "expected_source": "civil_procedure",
+    "expected_section": "10",
+    "expected_keywords": ["suit", "pending", "court"],
+    "category": "civil",
+    "difficulty": "medium"
+  },
+  {
+    "id": "cpc_place_of_suing",
+    "question": "Where can a civil suit be filed according to CPC?",
+    "expected_source": "civil_procedure",
+    "expected_section": "15",
+    "expected_keywords": ["territorial", "jurisdiction", "defendant"],
+    "category": "civil",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "bsa_electronic",
+    "question": "What are the provisions for electronic evidence under BSA?",
+    "expected_source": "BSA",
+    "expected_section": "63",
+    "expected_keywords": ["electronic", "record", "certificate"],
+    "category": "evidence",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "pesa_gram_sabha",
+    "question": "What are the powers of the Gram Sabha under PESA?",
+    "expected_source": "pesa",
+    "expected_section": "4",
+    "expected_keywords": ["Gram Sabha", "consultation", "Scheduled Areas"],
+    "category": "tribal",
+    "difficulty": "medium"
+  },
+  {
+    "id": "pesa_applicability",
+    "question": "Where does PESA apply?",
+    "expected_source": "pesa",
+    "expected_section": "3",
+    "expected_keywords": ["Scheduled Areas", "Fifth Schedule"],
+    "category": "tribal",
+    "difficulty": "easy"
+  },
+
+  {
+    "id": "fra_rights",
+    "question": "What rights are recognised under the Forest Rights Act?",
+    "expected_source": "FRA",
+    "expected_section": "3",
+    "expected_keywords": ["forest", "dwelling", "Scheduled Tribes", "rights"],
+    "category": "forest",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "cg_land_revenue_mutation",
+    "question": "What is the procedure for land mutation under the Chhattisgarh Land Revenue Code?",
+    "expected_source": "Land_Revenue",
+    "expected_section": "109",
+    "expected_keywords": ["mutation", "application", "tehsildar"],
+    "category": "cg_land",
+    "difficulty": "hard"
+  },
+  {
+    "id": "cg_land_revenue_partition",
+    "question": "How is partition of land done under the Chhattisgarh Land Revenue Code?",
+    "expected_source": "Land_Revenue",
+    "expected_section": "178",
+    "expected_keywords": ["partition", "co-tenant", "application"],
+    "category": "cg_land",
+    "difficulty": "hard"
+  },
+
+  {
+    "id": "cg_excise_penalty",
+    "question": "What are the penalties under the Chhattisgarh Excise Act?",
+    "expected_source": "Excise",
+    "expected_section": "48",
+    "expected_keywords": ["penalty", "ten thousand", "confiscation"],
+    "category": "cg_excise",
+    "difficulty": "medium"
+  },
+  {
+    "id": "cg_excise_licence",
+    "question": "What is the penalty for breach of licence conditions under CG Excise Act?",
+    "expected_source": "Excise",
+    "expected_section": "48A",
+    "expected_keywords": ["licence", "penalty", "Excise Commissioner"],
+    "category": "cg_excise",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "cg_rent_eviction",
+    "question": "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
+    "expected_source": "Rent_Control",
+    "expected_section": "12",
+    "expected_keywords": ["eviction", "landlord", "tenant", "arrears"],
+    "category": "cg_rent",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "cg_panchayat_gram_sabha",
+    "question": "What is the composition of the Gram Sabha under the CG Panchayat Raj Act?",
+    "expected_source": "Panchayat",
+    "expected_section": "7",
+    "expected_keywords": ["Gram Sabha", "voters", "village"],
+    "category": "cg_panchayat",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "cg_tendu_collection",
+    "question": "What is the procedure for tendu patta collection in Chhattisgarh?",
+    "expected_source": "tendu",
+    "expected_section": "",
+    "expected_keywords": ["tendu", "collection", "co-operative"],
+    "category": "cg_forest",
+    "difficulty": "hard"
+  },
+
+  {
+    "id": "cg_vanopaj_trade",
+    "question": "What is the regulation of vanopaj trade under Chhattisgarh law?",
+    "expected_source": "vanopaj",
+    "expected_section": "",
+    "expected_keywords": ["vanopaj", "trade", "regulation"],
+    "category": "cg_forest",
+    "difficulty": "hard"
+  },
+
+  {
+    "id": "cg_lok_sewa_guarantee",
+    "question": "What is the right to public services under the Chhattisgarh Lok Sewa Guarantee Act?",
+    "expected_source": "Lok_Sewa",
+    "expected_section": "",
+    "expected_keywords": ["service", "guarantee", "time limit"],
+    "category": "cg_service",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "cg_special_courts",
+    "question": "What is the purpose of the Chhattisgarh Special Courts Act?",
+    "expected_source": "Special_Courts",
+    "expected_section": "",
+    "expected_keywords": ["special court", "trial", "offence"],
+    "category": "cg_criminal",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "cg_cattle_preservation",
+    "question": "What is prohibited under the Chhattisgarh Agricultural Cattle Preservation Rules?",
+    "expected_source": "Cattle",
+    "expected_section": "",
+    "expected_keywords": ["cattle", "slaughter", "transport"],
+    "category": "cg_criminal",
+    "difficulty": "medium"
+  },
+
+  {
+    "id": "notfound_jaywalking",
+    "question": "What is the punishment for jaywalking in Chhattisgarh?",
+    "expected_source": null,
+    "expected_section": null,
+    "expected_keywords": ["not found"],
+    "category": "not_found_test",
+    "difficulty": "easy"
+  },
+  {
+    "id": "notfound_space_law",
+    "question": "What is India's law on commercial space mining?",
+    "expected_source": null,
+    "expected_section": null,
+    "expected_keywords": ["not found"],
+    "category": "not_found_test",
+    "difficulty": "easy"
+  },
+  {
+    "id": "notfound_crypto_tax",
+    "question": "What is the capital gains tax rate on cryptocurrency in Chhattisgarh?",
+    "expected_source": null,
+    "expected_section": null,
+    "expected_keywords": ["not found"],
+    "category": "not_found_test",
+    "difficulty": "easy"
+  }
+]

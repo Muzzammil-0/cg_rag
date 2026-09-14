@@ -2,5 +2,10 @@
 __pycache__/
 *.pyc
 .env
+
+# Generated data — reproducible from raw + pipeline
 data/raw/
+data/processed/
 data/vector_db/
+data/rag.db*
+data/evaluation/results.json
