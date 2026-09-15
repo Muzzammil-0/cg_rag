@@ -12,7 +12,6 @@ def clean_text(text):
     return '\n'.join(cleaned_lines)
 
 def is_toc_chunk(chunk):
-    """Reject chunks that are just table-of-contents entries."""
     if chunk["metadata"].get("doc_type") != "constitution":
         return False
     text = chunk["text"].strip()
@@ -21,7 +20,6 @@ def is_toc_chunk(chunk):
     return False
 
 def is_noise_chunk(chunk):
-    """Reject very short chunks or amendment-only notes."""
     text = chunk["text"].strip()
     if len(text) < 60:
         return True
@@ -72,11 +70,6 @@ def chunk_constitution(text, source):
     return chunks
 
 def split_constitution_subsections(chunks):
-    """
-    Split merged sub-articles like 21A out of parent article chunks.
-    E.g., if Article 21 chunk contains "21A. Right to education.—...",
-    split it into a separate chunk with article="21A".
-    """
     result = []
     for c in chunks:
         if c["metadata"].get("doc_type") != "constitution":
@@ -86,10 +79,6 @@ def split_constitution_subsections(chunks):
         article = c["metadata"].get("article", "")
         text = c["text"]
 
-        # Look for a sub-article pattern embedded in the text
-        # e.g., "21A." or "31B." or "243ZP." — number followed by 1-2 uppercase letters
-        # We look for the pattern occurring after the initial heading
-        # Skip the first heading (which is the parent article itself)
         heading_match = re.match(r'^\s*\d+[A-Z]*\.\s+', text)
         if not heading_match:
             result.append(c)
@@ -102,13 +91,11 @@ def split_constitution_subsections(chunks):
             result.append(c)
             continue
 
-        # Compute absolute position of the sub-article heading
         sub_abs_start = search_start + sub_match.start()
         parent_num = sub_match.group(1)
         sub_letter = sub_match.group(2)
         sub_article = f"{parent_num}{sub_letter}"
 
-        # Only split if the parent matches the article
         if article != parent_num:
             result.append(c)
             continue
@@ -155,6 +142,58 @@ def chunk_generic_act(text, source):
         })
     return chunks
 
+
+# ------------------------------
+# NEW: judgment chunker
+# ------------------------------
+def chunk_judgment(text, source):
+    """
+    Split a judgment by numbered paragraphs.
+    """
+    patterns = [
+        re.compile(r'^\s*(\d+)\.\s+(?=[A-Z(])', re.MULTILINE),
+        re.compile(r'^\s*Para\s+(\d+)\.\s+', re.MULTILINE | re.IGNORECASE),
+        re.compile(r'^\s*(\d+)\s{2,}(?=[A-Z(])', re.MULTILINE),
+    ]
+
+    matches = []
+    for pat in patterns:
+        matches = list(pat.finditer(text))
+        if len(matches) >= 5:
+            break
+
+    chunks = []
+    if not matches:
+        chunks.append({
+            "text": text.strip(),
+            "metadata": {
+                "source": source,
+                "doc_type": "judgment",
+                "para": "unknown"
+            }
+        })
+        return chunks
+
+    for i, match in enumerate(matches):
+        para_num = match.group(1)
+        start = match.start()
+        end = matches[i+1].start() if i+1 < len(matches) else len(text)
+        chunk_text = text[start:end].strip()
+
+        if len(chunk_text) < 100:
+            continue
+
+        chunks.append({
+            "text": chunk_text,
+            "metadata": {
+                "source": source,
+                "doc_type": "judgment",
+                "para": para_num
+            }
+        })
+    return chunks
+
+
 def main():
     input_file = Path("data/processed/extracted_text.json")
     output_file = Path("data/processed/chunks.jsonl")
@@ -163,17 +202,37 @@ def main():
         extracted = json.load(f)
 
     all_chunks = []
-    stats = {"total": 0, "toc_filtered": 0, "noise_filtered": 0}
+    stats = {
+        "total": 0,
+        "toc_filtered": 0,
+        "noise_filtered": 0,
+        "acts_processed": 0,
+        "judgments_processed": 0,
+    }
 
-    for filename, text in extracted.items():
-        cleaned = clean_text(text)
-        if "constitution" in filename.lower():
-            chunks = chunk_constitution(cleaned, filename)
+    for filename, entry in extracted.items():
+        # Handle both old (str) and new (dict) formats defensively
+        if isinstance(entry, dict):
+            text = entry.get("text", "")
+            doc_type = entry.get("doc_type", "act")
         else:
-            chunks = chunk_generic_act(cleaned, filename)
+            text = entry
+            doc_type = "act"
+
+        stats["total"] += 1
+
+        if doc_type == "judgment":
+            stats["judgments_processed"] += 1
+            chunks = chunk_judgment(text, filename)
+        else:
+            stats["acts_processed"] += 1
+            cleaned = clean_text(text)
+            if "constitution" in filename.lower():
+                chunks = chunk_constitution(cleaned, filename)
+            else:
+                chunks = chunk_generic_act(cleaned, filename)
 
         for c in chunks:
-            stats["total"] += 1
             if is_toc_chunk(c):
                 stats["toc_filtered"] += 1
                 continue
@@ -182,7 +241,6 @@ def main():
                 continue
             all_chunks.append(c)
 
-    # Post-process: split merged sub-articles (e.g., 21A inside 21)
     before_count = len(all_chunks)
     all_chunks = split_constitution_subsections(all_chunks)
     after_count = len(all_chunks)
@@ -193,11 +251,14 @@ def main():
         for chunk in all_chunks:
             f.write(json.dumps(chunk, ensure_ascii=False) + "\n")
 
-    print(f"Total raw chunks: {stats['total']}")
+    print(f"Total documents scanned: {stats['total']}")
+    print(f"Acts processed: {stats['acts_processed']}")
+    print(f"Judgments processed: {stats['judgments_processed']}")
     print(f"Filtered TOC: {stats['toc_filtered']}")
     print(f"Filtered noise: {stats['noise_filtered']}")
     print(f"Sub-articles split out: {split_extra}")
     print(f"Kept chunks: {len(all_chunks)} -> {output_file}")
+
 
 if __name__ == "__main__":
     main()

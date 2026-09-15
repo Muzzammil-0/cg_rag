@@ -15,7 +15,6 @@ def extract_text_from_txt(txt_path):
     return txt_path.read_text(encoding="utf-8")
 
 def filter_non_english(text):
-    """Remove lines containing Devanagari or other non-ASCII Indic scripts (optional)."""
     filtered = []
     for line in text.split('\n'):
         if not re.search(r'[\u0900-\u097F]', line):
@@ -23,11 +22,10 @@ def filter_non_english(text):
     return '\n'.join(filtered)
 
 if __name__ == "__main__":
-    # Define all raw directories to scan
     raw_dirs = [
-        Path("data/raw/central_acts"),
-        Path("data/raw/cg_acts"),
-        # Add future folders here, e.g., Path("data/raw/judgments")
+        (Path("data/raw/central_acts"), "act"),
+        (Path("data/raw/cg_acts"), "act"),
+        (Path("data/raw/judgments"), "judgment"),
     ]
 
     output_file = Path("data/processed/extracted_text.json")
@@ -35,31 +33,23 @@ if __name__ == "__main__":
 
     extracted = {}
 
-    for raw_dir in raw_dirs:
+    for raw_dir, doc_type in raw_dirs:
         if not raw_dir.exists():
             print(f"Warning: {raw_dir} does not exist. Skipping.")
             continue
 
-        print(f"\nScanning {raw_dir}...")
-        print("All files:", list(raw_dir.glob("*")))
+        print(f"\nScanning {raw_dir} (doc_type={doc_type})...")
 
-        # Extract PDFs
         for pdf in raw_dir.glob("*.pdf"):
-            print(f"Extracting PDF: {pdf.name}")
+            print(f"  Extracting PDF: {pdf.name}")
             text = extract_text_from_pdf(pdf)
-            # Optional: filter out Hindi lines (uncomment if needed)
-            # text = filter_non_english(text)
-            extracted[pdf.name] = text
+            extracted[pdf.name] = {"text": text, "doc_type": doc_type}
 
-        # Extract TXTs
         for txt in raw_dir.glob("*.txt"):
-            print(f"Extracting TXT: {txt.name}")
+            print(f"  Extracting TXT: {txt.name}")
             text = extract_text_from_txt(txt)
-            # Optional: filter out Hindi lines
-            # text = filter_non_english(text)
-            extracted[txt.name] = text
+            extracted[txt.name] = {"text": text, "doc_type": doc_type}
 
-    # Save all extracted text
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(extracted, f, indent=2, ensure_ascii=False)
 
