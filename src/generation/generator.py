@@ -67,7 +67,7 @@ def validate_citations(parsed, results):
     parsed["citations"] = valid_citations
     return parsed
 
-def generate_answer(question, top_k=5, model="openai/gpt-oss-20b", verbose=True):
+def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True):
     # 1. Retrieve relevant chunks
     results = hybrid_search(question, top_k=top_k)
 
@@ -109,7 +109,7 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-20b", verbose=True)
             {"role": "user", "content": user_msg}
         ],
         temperature=0.0,
-        max_tokens=800,
+        max_tokens=1024,
     )
 
     content = response.choices[0].message.content

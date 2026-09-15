@@ -30,7 +30,7 @@ def tokenize(text):
     return [_stemmer.stem(t) for t in tokens]
 
 # ----------------------------
-# Source detection
+# Source (act) detection
 # ----------------------------
 SOURCE_PATTERNS = [
     (["bnss", "bharatiya nagarik suraksha", "nagarik suraksha"], "Bharatiya_Nagarik"),
@@ -66,6 +66,34 @@ def detect_source_filter(query):
 def matches_source(metadata, source_fragment):
     src = metadata.get("source", "")
     return source_fragment.lower() in src.lower()
+
+# ----------------------------
+# Judgment-query detection
+# ----------------------------
+JUDGMENT_PATTERNS = [
+    "what have courts said",
+    "what have cg courts",
+    "what have the courts",
+    "what has the court said",
+    "case law",
+    "precedent",
+    "judgment",
+    "judgements",
+    "judgments",
+    "high court held",
+    "high court said",
+    "high court observed",
+    "courts have dealt",
+    "courts have interpreted",
+    "case law on",
+    "ruling",
+    "rulings",
+    "has the court held",
+]
+
+def query_wants_judgments(query):
+    q = query.lower()
+    return any(p in q for p in JUDGMENT_PATTERNS)
 
 # ----------------------------
 # Explicit section detection
@@ -153,21 +181,35 @@ bm25 = BM25Okapi(tokenized_corpus)
 
 _bm25_cache = {}
 
-def get_filtered_bm25(source_fragment):
-    if source_fragment in _bm25_cache:
-        return _bm25_cache[source_fragment]
-    indices = [i for i, c in enumerate(chunks) if matches_source(c["metadata"], source_fragment)]
+def _bm25_key(source_fragment, doc_type_filter):
+    return (source_fragment or "", doc_type_filter or "")
+
+def get_filtered_bm25(source_fragment, doc_type_filter=None):
+    key = _bm25_key(source_fragment, doc_type_filter)
+    if key in _bm25_cache:
+        return _bm25_cache[key]
+
+    indices = []
+    for i, c in enumerate(chunks):
+        meta = c["metadata"]
+        if source_fragment and not matches_source(meta, source_fragment):
+            continue
+        if doc_type_filter and meta.get("doc_type") != doc_type_filter:
+            continue
+        indices.append(i)
+
     if not indices:
-        _bm25_cache[source_fragment] = (None, [], [])
-        return _bm25_cache[source_fragment]
+        _bm25_cache[key] = (None, [], [])
+        return _bm25_cache[key]
+
     filtered_corpus = [tokenized_corpus[i] for i in indices]
     filtered_bm25 = BM25Okapi(filtered_corpus)
     result = (filtered_bm25, [chunks[i] for i in indices], indices)
-    _bm25_cache[source_fragment] = result
+    _bm25_cache[key] = result
     return result
 
 # ----------------------------
-# Chroma + models (lazy collection)
+# Chroma + models
 # ----------------------------
 def _chroma_path():
     if _os.getenv("SPACE_ID"):
@@ -181,7 +223,6 @@ reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 _collection = None
 
 def get_collection():
-    """Lazy-load the Chroma collection. Builds it if missing."""
     global _collection
     if _collection is not None:
         return _collection
@@ -198,11 +239,15 @@ ALL_SOURCES = sorted(set(c["metadata"].get("source", "") for c in chunks))
 SECTION_MAP = {}
 for i, c in enumerate(chunks):
     src = c["metadata"].get("source", "").lower()
-    sec = str(c["metadata"].get("section", c["metadata"].get("article", ""))).upper().rstrip('.').strip()
+    sec = str(
+        c["metadata"].get("section",
+                          c["metadata"].get("article",
+                                            c["metadata"].get("para", "")))
+    ).upper().rstrip('.').strip()
     if sec:
         SECTION_MAP.setdefault((src, sec), []).append(f"chunk_{i}")
 
-def find_chunks_by_section(source_filter, target_section):
+def find_chunks_by_section(source_filter, target_section, doc_type_filter=None):
     if not target_section:
         return []
     target = target_section.upper().rstrip('.').strip()
@@ -212,36 +257,57 @@ def find_chunks_by_section(source_filter, target_section):
             continue
         if source_filter and source_filter.lower() not in src:
             continue
-        matching_ids.extend(ids)
+        for cid in ids:
+            if doc_type_filter:
+                try:
+                    idx = int(cid.replace("chunk_", ""))
+                    if chunks[idx]["metadata"].get("doc_type") != doc_type_filter:
+                        continue
+                except (ValueError, IndexError):
+                    continue
+            matching_ids.append(cid)
     return matching_ids
 
-def dense_search(query, top_k=20, source_filter=None):
+def dense_search(query, top_k=20, source_filter=None, doc_type_filter=None):
     query_embedding = model.encode([query])[0]
     kwargs = {
         "query_embeddings": [query_embedding.tolist()],
         "n_results": top_k,
-        "include": ["documents", "metadatas", "distances"]
+        "include": ["documents", "metadatas", "distances"],
     }
+
+    where_conditions = []
     if source_filter:
         matching_sources = [s for s in ALL_SOURCES if source_filter.lower() in s.lower()]
-        if matching_sources:
-            if len(matching_sources) == 1:
-                kwargs["where"] = {"source": matching_sources[0]}
-            else:
-                kwargs["where"] = {"source": {"$in": matching_sources}}
-        else:
+        if not matching_sources:
             return []
+        if len(matching_sources) == 1:
+            where_conditions.append({"source": matching_sources[0]})
+        else:
+            where_conditions.append({"source": {"$in": matching_sources}})
+
+    if doc_type_filter:
+        where_conditions.append({"doc_type": doc_type_filter})
+
+    if len(where_conditions) == 1:
+        kwargs["where"] = where_conditions[0]
+    elif len(where_conditions) > 1:
+        kwargs["where"] = {"$and": where_conditions}
+
     results = get_collection().query(**kwargs)
     rows = list(zip(
         results["ids"][0], results["documents"][0],
-        results["metadatas"][0], results["distances"][0]
+        results["metadatas"][0], results["distances"][0],
     ))
     return rows[:top_k]
 
-def sparse_search(query, top_k=20, source_filter=None):
+def sparse_search(query, top_k=20, source_filter=None, doc_type_filter=None):
     tokenized_query = tokenize(query)
-    if source_filter:
-        filtered_bm25, filtered_chunks, original_indices = get_filtered_bm25(source_filter)
+
+    if source_filter or doc_type_filter:
+        filtered_bm25, filtered_chunks, original_indices = get_filtered_bm25(
+            source_filter, doc_type_filter
+        )
         if filtered_bm25 is None:
             return []
         scores = filtered_bm25.get_scores(tokenized_query)
@@ -256,8 +322,14 @@ def sparse_search(query, top_k=20, source_filter=None):
     else:
         scores = bm25.get_scores(tokenized_query)
         top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-        return [(f"chunk_{i}", chunks[i]["text"], chunks[i]["metadata"], scores[i]) for i in top_indices]
+        return [
+            (f"chunk_{i}", chunks[i]["text"], chunks[i]["metadata"], scores[i])
+            for i in top_indices
+        ]
 
+# ----------------------------
+# RRF
+# ----------------------------
 def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
     fused_scores = {}
     for rank, (id_, _, _, _) in enumerate(dense_results):
@@ -267,9 +339,14 @@ def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
     sorted_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)
     return sorted_ids, fused_scores
 
-def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
+# ----------------------------
+# Hybrid search
+# ----------------------------
+def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rerank=True):
     if source_filter is None:
         source_filter = detect_source_filter(query)
+    if doc_type_filter is None and query_wants_judgments(query):
+        doc_type_filter = "judgment"
 
     target_section = extract_section_from_query(query)
     if not target_section:
@@ -279,7 +356,7 @@ def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
     seen_ids = set()
 
     if target_section:
-        section_ids = find_chunks_by_section(source_filter, target_section)
+        section_ids = find_chunks_by_section(source_filter, target_section, doc_type_filter)
         for cid in section_ids:
             if cid in seen_ids:
                 continue
@@ -300,8 +377,12 @@ def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
                 break
 
     if len(final_results) < top_k:
-        dense_results = dense_search(query, top_k=40, source_filter=source_filter)
-        sparse_results = sparse_search(query, top_k=40, source_filter=source_filter)
+        dense_results = dense_search(
+            query, top_k=40, source_filter=source_filter, doc_type_filter=doc_type_filter
+        )
+        sparse_results = sparse_search(
+            query, top_k=40, source_filter=source_filter, doc_type_filter=doc_type_filter
+        )
 
         sorted_ids, fused_scores = reciprocal_rank_fusion(dense_results, sparse_results)
         id_to_chunk = {f"chunk_{i}": chunks[i] for i in range(len(chunks))}
@@ -340,3 +421,28 @@ def hybrid_search(query, top_k=5, source_filter=None, rerank=True):
                 })
 
     return final_results[:top_k]
+
+
+# ----------------------------
+# Test
+# ----------------------------
+if __name__ == "__main__":
+    test_queries = [
+        "What is the punishment for murder under BNS?",
+        "What is the definition of theft under IPC?",
+        "What is the procedure for registering an FIR under CrPC?",
+        "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
+        "What have CG courts said about land acquisition compensation?",
+        "What have the courts held about electricity theft?",
+    ]
+    for q in test_queries:
+        sf = detect_source_filter(q)
+        wants_j = query_wants_judgments(q)
+        print(f"\n=== {q} ===")
+        print(f"  source_filter={sf}  judgment_query={wants_j}")
+        results = hybrid_search(q, top_k=3)
+        for i, r in enumerate(results):
+            m = r["metadata"]
+            sec = m.get("section", m.get("article", m.get("para", "")))
+            print(f"  [{i+1}] {m.get('source')} sec/para={sec} ({r.get('match_type')})")
+            print(f"      {r['text'][:140].replace(chr(10), ' ')}...")
