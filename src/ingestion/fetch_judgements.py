@@ -36,8 +36,8 @@ async def fetch_by_year(year: str, limit: int = 50):
 
 async def main():
     # Recent years only — keeps test set manageable
-    for year in range(2020, 2026):
-        await fetch_by_year(str(year), limit=50)
+    for year in range(2010, 2015):
+        await fetch_by_year(str(year), limit=100)
 
 
 if __name__ == "__main__":

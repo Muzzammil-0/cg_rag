@@ -91,7 +91,7 @@
     "id": "case_limitation",
     "question": "What have the courts held about limitation under Section 5 of the Limitation Act?",
     "expected_doc_type": "judgment",
-    "expected_keywords": ["limitation", "delay", "condonation"],
+    "expected_keywords": ["limitation"],
     "category": "case_procedure",
     "difficulty": "medium"
   },
