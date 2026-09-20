@@ -2,6 +2,7 @@ import os
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
@@ -13,7 +14,47 @@ from src.retrieval.retriever import hybrid_search
 load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
+# ------------------------------------------------------------
+# Config
+# ------------------------------------------------------------
+CHUNK_CHAR_LIMIT = 800       # truncate each retrieved chunk to this many chars
+GROQ_MAX_RETRIES = 3         # total attempts on rate limit
+GROQ_BACKOFF_BASE = 5        # seconds; wait = base * (2 ** attempt)
 
+
+# ------------------------------------------------------------
+# Retry wrapper for Groq rate limits
+# ------------------------------------------------------------
+def call_groq_with_retry(max_retries=GROQ_MAX_RETRIES, **kwargs):
+    """
+    Call Groq with exponential backoff on rate-limit errors.
+    Other errors are re-raised immediately.
+    """
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as e:
+            last_error = e
+            err_str = str(e)
+            is_rate_limit = (
+                "rate_limit_exceeded" in err_str
+                or "Request too large" in err_str
+                or "413" in err_str
+                or "429" in err_str
+            )
+            if is_rate_limit and attempt < max_retries - 1:
+                wait = GROQ_BACKOFF_BASE * (2 ** attempt)
+                print(f"[rate limit] attempt {attempt + 1}/{max_retries} — waiting {wait}s...")
+                time.sleep(wait)
+                continue
+            raise
+    raise last_error
+
+
+# ------------------------------------------------------------
+# JSON extraction
+# ------------------------------------------------------------
 def extract_json(text):
     """Try to extract the first balanced JSON object from text, stripping thinking blocks."""
     text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL)
@@ -66,21 +107,32 @@ def validate_citations(parsed, results):
     return parsed
 
 
-# ------------------------------------------------------------------
-# MODE 1: Retrieval + answer (existing behavior)
-# ------------------------------------------------------------------
-def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True):
-    results = hybrid_search(question, top_k=top_k)
-
-    context_parts = []
+# ------------------------------------------------------------
+# Context builder (with truncation)
+# ------------------------------------------------------------
+def build_context(results, char_limit=CHUNK_CHAR_LIMIT):
+    """Build context string with truncated chunks to stay within token budget."""
+    parts = []
     for i, res in enumerate(results):
         meta = res["metadata"]
         src = meta.get("source", "unknown")
-        section = meta.get("article") or meta.get("section") or meta.get("para") or ""
-        context_parts.append(
-            f"[{i+1}] Source: {src}, Section/Article: {section}\n{res['text']}"
+        section = (
+            meta.get("article")
+            or meta.get("section")
+            or meta.get("para")
+            or ""
         )
-    context = "\n\n".join(context_parts)
+        snippet = res["text"][:char_limit].replace("\n", " ")
+        parts.append(f"[{i+1}] Source: {src}, Section/Article: {section}\n{snippet}")
+    return "\n\n".join(parts)
+
+
+# ------------------------------------------------------------
+# MODE 1: Retrieval + answer
+# ------------------------------------------------------------
+def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True):
+    results = hybrid_search(question, top_k=top_k)
+    context = build_context(results)
 
     system_msg = (
         "You are a legal research assistant for Indian law and Chhattisgarh law. "
@@ -91,8 +143,7 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True
         "If a claim is not present in any retrieved chunk, do not include it. "
         "Prefer shorter answers over answers that mix retrieved and remembered information. "
         "Return your response as a JSON object with keys: answer (string), citations (list of numbers), confidence (float between 0 and 1). "
-        "Be concise: each list should have 3-5 items max, and each string should be under 200 characters."
-        "Do not include any thinking or reaosoning. Output only the JSON object."
+        "Do not include any text outside the JSON object. "
         "Do not hallucinate or make up information. "
         "Do not include any thinking or reasoning. Output only the JSON object."
     )
@@ -103,14 +154,14 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True
         "Provide the JSON response."
     )
 
-    response = client.chat.completions.create(
+    response = call_groq_with_retry(
         model=model,
         messages=[
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
         ],
         temperature=0.0,
-        max_tokens=3000,
+        max_tokens=1024,
     )
 
     content = response.choices[0].message.content
@@ -130,23 +181,16 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True
     return parsed, results
 
 
-# ------------------------------------------------------------------
-# MODE 2: Simulated judicial reasoning (educational)
-# ------------------------------------------------------------------
-def generate_reasoning(fact_pattern, top_k=8, model="openai/gpt-oss-120b", verbose=True):
+# ------------------------------------------------------------
+# MODE 2: Simulated judicial reasoning
+# ------------------------------------------------------------
+def generate_reasoning(fact_pattern, top_k=10, model="openai/gpt-oss-120b", verbose=True):
     """
     Simulate how a Chhattisgarh court might reason through a fact pattern.
     Educational tool for law students. Not legal advice, not a prediction.
     """
     results = hybrid_search(fact_pattern, top_k=top_k)
-
-    context_parts = []
-    for i, res in enumerate(results):
-        meta = res["metadata"]
-        src = meta.get("source", "unknown")
-        sec = meta.get("section") or meta.get("article") or meta.get("para") or ""
-        context_parts.append(f"[{i+1}] Source: {src}, Section/Article: {sec}\n{res['text']}")
-    context = "\n\n".join(context_parts)
+    context = build_context(results)
 
     system_msg = (
         "You are simulating how a Chhattisgarh court might reason through a legal question. "
@@ -163,6 +207,7 @@ def generate_reasoning(fact_pattern, top_k=8, model="openai/gpt-oss-120b", verbo
         "possible_outcome (string, hedged with caveats), "
         "confidence (float between 0 and 1), "
         "citations (list of context numbers used as integers). "
+        "Be concise: each list should have 3-5 items max, and each string should be under 200 characters. "
         "Do not include any text outside the JSON object. "
         "Do not include any thinking or reasoning. Output only the JSON object."
     )
@@ -173,7 +218,7 @@ def generate_reasoning(fact_pattern, top_k=8, model="openai/gpt-oss-120b", verbo
         "Produce the reasoning JSON."
     )
 
-    response = client.chat.completions.create(
+    response = call_groq_with_retry(
         model=model,
         messages=[
             {"role": "system", "content": system_msg},
@@ -181,7 +226,6 @@ def generate_reasoning(fact_pattern, top_k=8, model="openai/gpt-oss-120b", verbo
         ],
         temperature=0.2,
         max_tokens=3000,
-        response_format={"type": "json_object"},
     )
 
     content = response.choices[0].message.content
@@ -190,8 +234,7 @@ def generate_reasoning(fact_pattern, top_k=8, model="openai/gpt-oss-120b", verbo
 
     parsed = extract_json(content)
     if parsed is None:
-        print("\n[WARNING] Failed to parse JSON — model output may have been truncated.")
-        print("Consider increasing max_tokens or reducing prompt verbosity.")
+        print("\n[WARNING] Parse failed. Output may be truncated.")
         parsed = {
             "issues": [],
             "provisions": [],
@@ -209,9 +252,10 @@ def generate_reasoning(fact_pattern, top_k=8, model="openai/gpt-oss-120b", verbo
 
     return parsed, results
 
-# ------------------------------------------------------------------
+
+# ------------------------------------------------------------
 # CLI test harness
-# ------------------------------------------------------------------
+# ------------------------------------------------------------
 if __name__ == "__main__":
     mode = input("Mode (query/reason): ").strip().lower()
 
