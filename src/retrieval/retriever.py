@@ -167,7 +167,11 @@ SECTION_HINTS = [
     ("where does pesa apply", "pesa", "3"),
     ("pesa applicability", "pesa", "3"),
     # CG Rent Control
-    ("eviction", "Rent_Control", "12"),
+    ("grounds for eviction", "Rent_Control", "11"),
+    ("eviction grounds", "Rent_Control", "11"),
+    ("evict tenant", "Rent_Control", "11"),
+    ("habitual defaulter", "Rent_Control", "11"),
+    ("eviction", "Rent_Control", "11"),
     # CG Land Revenue
     ("mutation", "Land_Revenue", "109"),
     ("partition", "Land_Revenue", "178"),

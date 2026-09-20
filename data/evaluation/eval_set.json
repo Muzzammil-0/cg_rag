@@ -348,7 +348,7 @@
     "id": "cg_rent_eviction",
     "question": "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
     "expected_source": "Rent_Control",
-    "expected_section": "12",
+    "expected_section": "11",
     "expected_keywords": ["eviction", "landlord", "tenant", "arrears"],
     "category": "cg_rent",
     "difficulty": "medium"
