@@ -1,0 +1,162 @@
+[
+  {
+    "id": "case_motor_compensation",
+    "question": "What have CG courts said about motor accident compensation?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["motor", "compensation", "tribunal"],
+    "category": "case_motor",
+    "difficulty": "easy"
+  },
+  {
+    "id": "case_motor_death",
+    "question": "Show me case law on motor vehicle accident death claims in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["motor", "death", "claimant"],
+    "category": "case_motor",
+    "difficulty": "easy"
+  },
+  {
+    "id": "case_insurance_liability",
+    "question": "What have courts held about insurance company liability in motor accident cases?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["insurance", "liability", "policy"],
+    "category": "case_motor",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_land_acquisition",
+    "question": "What have CG courts said about land acquisition compensation?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["compensation", "acquisition", "land"],
+    "category": "case_land",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_partition_agri",
+    "question": "What have the courts held about partition of agricultural land?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["partition", "agricultural", "share"],
+    "category": "case_land",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_electricity_theft",
+    "question": "Show me case law on electricity theft in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["electricity", "theft", "meter"],
+    "category": "case_electricity",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_cheque_bounce",
+    "question": "Case law on cheque bounce under Section 138 NI Act.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["cheque", "dishonour", "complaint"],
+    "category": "case_commercial",
+    "difficulty": "easy"
+  },
+  {
+    "id": "case_criminal_murder",
+    "question": "What have CG courts held in murder conviction appeals?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["murder", "conviction", "appeal"],
+    "category": "case_criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "case_criminal_bail",
+    "question": "Show me case law on bail applications in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["bail", "applicant", "custody"],
+    "category": "case_criminal",
+    "difficulty": "easy"
+  },
+  {
+    "id": "case_pocso",
+    "question": "What have courts said in POCSO cases in Chhattisgarh?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["pocso", "child", "victim"],
+    "category": "case_criminal",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_ndps",
+    "question": "Case law on NDPS Act offences in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["ndps", "narcotic", "recovery"],
+    "category": "case_criminal",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_limitation",
+    "question": "What have the courts held about limitation under Section 5 of the Limitation Act?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["limitation", "delay", "condonation"],
+    "category": "case_procedure",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_service_matter",
+    "question": "Show me case law on service matters of state government employees in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["service", "employee", "department"],
+    "category": "case_service",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_land_revenue",
+    "question": "What have CG courts said about land revenue disputes?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["land", "revenue", "tehsildar"],
+    "category": "case_land",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_compensation_death",
+    "question": "Show me judgments awarding compensation for accidental death.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["compensation", "death", "award"],
+    "category": "case_motor",
+    "difficulty": "easy"
+  },
+  {
+    "id": "case_specific_performance",
+    "question": "What have CG courts held in specific performance suits?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["specific performance", "contract", "agreement"],
+    "category": "case_civil",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_injunction",
+    "question": "Case law on permanent injunction in civil disputes in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["injunction", "possession", "plaintiff"],
+    "category": "case_civil",
+    "difficulty": "medium"
+  },
+  {
+    "id": "case_theft",
+    "question": "Show me case law on theft convictions in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["theft", "conviction", "stolen"],
+    "category": "case_criminal",
+    "difficulty": "hard"
+  },
+  {
+    "id": "case_rent_eviction",
+    "question": "Case law on rent control eviction in Chhattisgarh.",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["rent", "eviction", "tenant"],
+    "category": "case_rent",
+    "difficulty": "hard"
+  },
+  {
+    "id": "case_tribal_rights",
+    "question": "What have CG courts said about tribal land rights?",
+    "expected_doc_type": "judgment",
+    "expected_keywords": ["tribal", "land", "scheduled"],
+    "category": "case_tribal",
+    "difficulty": "hard"
+  }
+]

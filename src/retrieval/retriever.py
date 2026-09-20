@@ -75,6 +75,11 @@ JUDGMENT_PATTERNS = [
     "what have cg courts",
     "what have the courts",
     "what has the court said",
+    "what have courts held",
+    "what have the courts held",
+    "what has the court held",
+    "what have the high court",
+    "what has the high court",
     "case law",
     "precedent",
     "judgment",
@@ -85,7 +90,10 @@ JUDGMENT_PATTERNS = [
     "high court observed",
     "courts have dealt",
     "courts have interpreted",
+    "courts have ruled",
+    "court has ruled",
     "case law on",
+    "judgments on",
     "ruling",
     "rulings",
     "has the court held",
@@ -121,11 +129,15 @@ SECTION_HINTS = [
     ("punishment for dacoity", "IPC", "395"),
     ("punishment for defamation", "IPC", "500"),
     ("culpable homicide", "IPC", "299"),
+    ("punishment for rape", "IPC", "376"),
+    ("rape", "IPC", "376"),
     # BNS
     ("definition of theft", "BNS", "303"),
     ("punishment for murder", "BNS", "103"),
     ("attempt to murder", "BNS", "109"),
     ("culpable homicide", "BNS", "105"),
+    ("punishment for rape", "BNS", "64"),
+    ("rape", "BNS", "64"),
     # CrPC
     ("fir", "criminal_procedure", "154"),
     ("first information report", "criminal_procedure", "154"),
@@ -347,6 +359,8 @@ def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rera
         source_filter = detect_source_filter(query)
     if doc_type_filter is None and query_wants_judgments(query):
         doc_type_filter = "judgment"
+        # Case-law query: ignore act-source filter, restrict to judgments only
+        source_filter = None
 
     target_section = extract_section_from_query(query)
     if not target_section:
@@ -433,7 +447,8 @@ if __name__ == "__main__":
         "What is the procedure for registering an FIR under CrPC?",
         "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
         "What have CG courts said about land acquisition compensation?",
-        "What have the courts held about electricity theft?",
+        "Case law on rent control eviction in Chhattisgarh.",
+        "What have CG courts said about land revenue disputes?",
     ]
     for q in test_queries:
         sf = detect_source_filter(q)
@@ -441,6 +456,8 @@ if __name__ == "__main__":
         print(f"\n=== {q} ===")
         print(f"  source_filter={sf}  judgment_query={wants_j}")
         results = hybrid_search(q, top_k=3)
+        if not results:
+            print("  [NO RESULTS]")
         for i, r in enumerate(results):
             m = r["metadata"]
             sec = m.get("section", m.get("article", m.get("para", "")))
