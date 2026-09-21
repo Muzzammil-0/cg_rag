@@ -9,3 +9,4 @@ data/raw/
 data/vector_db/
 data/rag.db*
 data/evaluation/results.json
+data/evaluation/case_law_results.json
