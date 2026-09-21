@@ -71,8 +71,23 @@ def reasoning_fn(fact_pattern):
             "", "", "", "", "", "",
         )
 
+    # Reject question-style input — this tab expects a scenario, not a question
+    text = fact_pattern.strip().lower()
+    question_starters = (
+        "what ", "how ", "when ", "why ", "who ", "is ", "are ",
+        "can ", "does ", "should ", "which ", "where ",
+    )
+    if text.startswith(question_starters):
+        msg = (
+            "**This tab expects a fact pattern, not a question.**\n\n"
+            "**Wrong:** *What are the conditions for rape?*\n\n"
+            "**Right:** *A 25-year-old man forced himself on a 20-year-old woman at a party. "
+            "She reported the next day. The defence claims the act was consensual.*\n\n"
+            "If you want to ask a question, use the **Ask a legal question** tab."
+        )
+        return (msg, "", "", "", "", "", "")
     try:
-        result, results = generate_reasoning(fact_pattern, top_k=8, verbose=False)
+        result, results = generate_reasoning(fact_pattern, top_k=10, verbose=False)
     except Exception as e:
         return (f"Error: {e}", "", "", "", "", "", "")
 
