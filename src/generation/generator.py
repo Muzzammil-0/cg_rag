@@ -105,13 +105,11 @@ def validate_citations(parsed, results):
 def validate_reasoning_provisions(parsed, results):
     """
     Drop provisions whose section numbers do not appear in the metadata
-    of any retrieved chunk. Catches hallucinated section numbers in the
-    reasoning output (e.g., model claims 'BNS 70' when only BNS 63 was retrieved).
+    of any retrieved chunk.
     """
     if not parsed or not isinstance(parsed.get("provisions"), list):
         return parsed
 
-    # Collect all section identifiers present in retrieved chunks
     present = set()
     for r in results:
         meta = r["metadata"]
@@ -121,7 +119,6 @@ def validate_reasoning_provisions(parsed, results):
                 continue
             s = str(val).lower().strip().rstrip('.')
             present.add(s)
-            # Also add the leading number (e.g., "12(3)" -> "12")
             m = re.match(r'(\d+[A-Za-z]*)', s)
             if m:
                 present.add(m.group(1).lower())
@@ -171,6 +168,46 @@ def build_context(results, char_limit=CHUNK_CHAR_LIMIT):
         snippet = res["text"][:char_limit].replace("\n", " ")
         parts.append(f"[{i+1}] Source: {src}, Section/Article: {section}\n{snippet}")
     return "\n\n".join(parts)
+
+
+# ------------------------------------------------------------
+# Legal issue extraction (query expansion for reasoning)
+# ------------------------------------------------------------
+def extract_legal_issues(fact_pattern, model="openai/gpt-oss-120b"):
+    """
+    Given a plain-English fact pattern, ask the LLM to surface the
+    legal issues using proper legal terminology. Used to improve retrieval
+    before running reasoning mode.
+    """
+    system_msg = (
+        "You are a legal analyst for Indian and Chhattisgarh law. "
+        "Given a fact pattern in plain English, identify the specific legal issues it raises "
+        "and phrase them using proper legal terminology that would appear in statutes. "
+        "Use terms like 'rape', 'consent', 'murder', 'theft', 'bail', 'eviction', "
+        "'land acquisition', 'mutation', 'partition', 'cheque bounce', 'anticipatory bail', etc. "
+        "Return ONLY a JSON object with key 'issues' containing a list of 3-5 short phrases. "
+        "No thinking, no explanation, output only the JSON."
+    )
+    user_msg = f"Fact pattern:\n{fact_pattern}\n\nReturn the JSON."
+
+    try:
+        response = call_groq_with_retry(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.0,
+            max_tokens=300,
+        )
+        content = response.choices[0].message.content
+        parsed = extract_json(content)
+        if parsed and isinstance(parsed.get("issues"), list):
+            return [str(x) for x in parsed["issues"]]
+    except Exception as e:
+        print(f"[extract_legal_issues] failed: {e}")
+
+    return []
 
 
 # ------------------------------------------------------------
@@ -228,10 +265,26 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True
 
 
 # ------------------------------------------------------------
-# MODE 2: Reasoning
+# MODE 2: Reasoning with query expansion
 # ------------------------------------------------------------
 def generate_reasoning(fact_pattern, top_k=10, model="openai/gpt-oss-120b", verbose=True):
-    results = hybrid_search(fact_pattern, top_k=top_k)
+    """
+    Simulate how a Chhattisgarh court might reason through a fact pattern.
+    Educational tool for law students. Not legal advice, not a prediction.
+    """
+    # Step 1: Extract legal issues to improve retrieval vocabulary
+    legal_issues = extract_legal_issues(fact_pattern, model=model)
+    if verbose:
+        print(f"[reasoning] extracted legal issues: {legal_issues}")
+
+    # Step 2: Build an augmented search query
+    if legal_issues:
+        augmented_query = fact_pattern + " | " + " ".join(legal_issues)
+    else:
+        augmented_query = fact_pattern
+
+    # Step 3: Retrieve with the augmented query
+    results = hybrid_search(augmented_query, top_k=top_k)
     context = build_context(results)
 
     system_msg = (
@@ -239,7 +292,8 @@ def generate_reasoning(fact_pattern, top_k=10, model="openai/gpt-oss-120b", verb
         "This is an EDUCATIONAL exercise for law students, not legal advice. "
         "Use ONLY the provided context from statutes and judgments. "
         "Do not invent provisions, case names, or citations. "
-        "Every section number you cite MUST appear in the retrieved context. "
+        "Every section number you cite MUST appear in the retrieved context with its act name. "
+        "Use the act name exactly as it appears in the source (e.g., 'IPC Section 376', 'BNS Section 64'). "
         "If the context is insufficient, say so in the relevant field. "
         "Return a JSON object with these exact keys: "
         "issues (list of strings), "
@@ -327,6 +381,12 @@ if __name__ == "__main__":
 
         print(f"\nConfidence: {result.get('confidence', 0.0)}")
         print(f"Citations: {result.get('citations', [])}")
+
+        print("\nRetrieved sources:")
+        for i, r in enumerate(retrieved):
+            m = r["metadata"]
+            sec = m.get("section", m.get("article", m.get("para", "")))
+            print(f"  [{i+1}] {m.get('source')} — {sec}")
     else:
         question = input("Enter your legal question: ")
         answer_data, retrieved = generate_answer(question)
