@@ -17,19 +17,15 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 # ------------------------------------------------------------
 # Config
 # ------------------------------------------------------------
-CHUNK_CHAR_LIMIT = 800       # truncate each retrieved chunk to this many chars
-GROQ_MAX_RETRIES = 3         # total attempts on rate limit
-GROQ_BACKOFF_BASE = 5        # seconds; wait = base * (2 ** attempt)
+CHUNK_CHAR_LIMIT = 800
+GROQ_MAX_RETRIES = 3
+GROQ_BACKOFF_BASE = 5
 
 
 # ------------------------------------------------------------
-# Retry wrapper for Groq rate limits
+# Retry wrapper
 # ------------------------------------------------------------
 def call_groq_with_retry(max_retries=GROQ_MAX_RETRIES, **kwargs):
-    """
-    Call Groq with exponential backoff on rate-limit errors.
-    Other errors are re-raised immediately.
-    """
     last_error = None
     for attempt in range(max_retries):
         try:
@@ -56,7 +52,6 @@ def call_groq_with_retry(max_retries=GROQ_MAX_RETRIES, **kwargs):
 # JSON extraction
 # ------------------------------------------------------------
 def extract_json(text):
-    """Try to extract the first balanced JSON object from text, stripping thinking blocks."""
     text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL)
     text = re.sub(r'```(?:json)?\s*', '', text)
     text = re.sub(r'```', '', text)
@@ -107,11 +102,62 @@ def validate_citations(parsed, results):
     return parsed
 
 
+def validate_reasoning_provisions(parsed, results):
+    """
+    Drop provisions whose section numbers do not appear in the metadata
+    of any retrieved chunk. Catches hallucinated section numbers in the
+    reasoning output (e.g., model claims 'BNS 70' when only BNS 63 was retrieved).
+    """
+    if not parsed or not isinstance(parsed.get("provisions"), list):
+        return parsed
+
+    # Collect all section identifiers present in retrieved chunks
+    present = set()
+    for r in results:
+        meta = r["metadata"]
+        for key in ("section", "article", "para"):
+            val = meta.get(key)
+            if not val:
+                continue
+            s = str(val).lower().strip().rstrip('.')
+            present.add(s)
+            # Also add the leading number (e.g., "12(3)" -> "12")
+            m = re.match(r'(\d+[A-Za-z]*)', s)
+            if m:
+                present.add(m.group(1).lower())
+
+    kept = []
+    dropped = []
+    for p in parsed["provisions"]:
+        sec_raw = str(p.get("section", "")).strip()
+        if not sec_raw:
+            kept.append(p)
+            continue
+
+        m = re.match(r'(?:section\s+)?(\d+[A-Za-z]*)', sec_raw, re.IGNORECASE)
+        if not m:
+            kept.append(p)
+            continue
+        sec_key = m.group(1).lower()
+
+        if sec_key in present:
+            kept.append(p)
+        else:
+            dropped.append(p)
+
+    parsed["provisions"] = kept
+    if dropped:
+        print(f"[validate_reasoning] dropped {len(dropped)} hallucinated provision(s):")
+        for d in dropped:
+            print(f"  - {d.get('source', '?')} {d.get('section', '?')}")
+
+    return parsed
+
+
 # ------------------------------------------------------------
-# Context builder (with truncation)
+# Context builder
 # ------------------------------------------------------------
 def build_context(results, char_limit=CHUNK_CHAR_LIMIT):
-    """Build context string with truncated chunks to stay within token budget."""
     parts = []
     for i, res in enumerate(results):
         meta = res["metadata"]
@@ -182,13 +228,9 @@ def generate_answer(question, top_k=5, model="openai/gpt-oss-120b", verbose=True
 
 
 # ------------------------------------------------------------
-# MODE 2: Simulated judicial reasoning
+# MODE 2: Reasoning
 # ------------------------------------------------------------
 def generate_reasoning(fact_pattern, top_k=10, model="openai/gpt-oss-120b", verbose=True):
-    """
-    Simulate how a Chhattisgarh court might reason through a fact pattern.
-    Educational tool for law students. Not legal advice, not a prediction.
-    """
     results = hybrid_search(fact_pattern, top_k=top_k)
     context = build_context(results)
 
@@ -197,6 +239,7 @@ def generate_reasoning(fact_pattern, top_k=10, model="openai/gpt-oss-120b", verb
         "This is an EDUCATIONAL exercise for law students, not legal advice. "
         "Use ONLY the provided context from statutes and judgments. "
         "Do not invent provisions, case names, or citations. "
+        "Every section number you cite MUST appear in the retrieved context. "
         "If the context is insufficient, say so in the relevant field. "
         "Return a JSON object with these exact keys: "
         "issues (list of strings), "
@@ -236,25 +279,21 @@ def generate_reasoning(fact_pattern, top_k=10, model="openai/gpt-oss-120b", verb
     if parsed is None:
         print("\n[WARNING] Parse failed. Output may be truncated.")
         parsed = {
-            "issues": [],
-            "provisions": [],
-            "petitioner_arguments": [],
-            "respondent_arguments": [],
-            "likely_reasoning": "",
-            "possible_outcome": "",
-            "confidence": 0.0,
-            "citations": [],
-            "error": "parse_failed",
-            "raw": content,
+            "issues": [], "provisions": [],
+            "petitioner_arguments": [], "respondent_arguments": [],
+            "likely_reasoning": "", "possible_outcome": "",
+            "confidence": 0.0, "citations": [],
+            "error": "parse_failed", "raw": content,
         }
     else:
         parsed = validate_citations(parsed, results)
+        parsed = validate_reasoning_provisions(parsed, results)
 
     return parsed, results
 
 
 # ------------------------------------------------------------
-# CLI test harness
+# CLI test
 # ------------------------------------------------------------
 if __name__ == "__main__":
     mode = input("Mode (query/reason): ").strip().lower()
@@ -268,7 +307,7 @@ if __name__ == "__main__":
         for issue in result.get("issues", []):
             print(f"  - {issue}")
 
-        print("\nProvisions:")
+        print("\nProvisions (validated):")
         for prov in result.get("provisions", []):
             print(f"  - {prov.get('source')} {prov.get('section')}: {prov.get('relevance')}")
 
@@ -288,12 +327,6 @@ if __name__ == "__main__":
 
         print(f"\nConfidence: {result.get('confidence', 0.0)}")
         print(f"Citations: {result.get('citations', [])}")
-
-        print("\nRetrieved sources:")
-        for i, r in enumerate(retrieved):
-            m = r["metadata"]
-            sec = m.get("section", m.get("article", m.get("para", "")))
-            print(f"  [{i+1}] {m.get('source')} — {sec}")
     else:
         question = input("Enter your legal question: ")
         answer_data, retrieved = generate_answer(question)

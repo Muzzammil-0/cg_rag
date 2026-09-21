@@ -133,6 +133,13 @@ SECTION_HINTS = [
     ("ingredients of murder", "IPC", "300"),
     ("murder definition", "IPC", "300"),
     ("murder", "IPC", "302"),
+    ("definition of theft", "IPC", "378"),
+    ("punishment for theft", "IPC", "379"),
+    ("punishment for cheating", "IPC", "420"),
+    ("punishment for murder", "IPC", "302"),
+    ("attempt to murder", "IPC", "307"),
+    ("punishment for dacoity", "IPC", "395"),
+    ("punishment for defamation", "IPC", "500"),
     ("definition of rape", "IPC", "375"),
     ("what constitutes rape", "IPC", "375"),
     ("elements of rape", "IPC", "375"),
@@ -141,7 +148,9 @@ SECTION_HINTS = [
     ("conditions for a case to be considered rape", "IPC", "375"),
     ("when is it rape", "IPC", "375"),
     ("punishment for rape", "IPC", "376"),
-    # BNS
+    ("rape", "IPC", "376"),
+
+    # =================== BNS ===================
     ("definition of theft", "BNS", "303"),
     ("attempt to murder", "BNS", "109"),
     ("definition of murder", "BNS", "101"),
@@ -158,54 +167,73 @@ SECTION_HINTS = [
     ("conditions for a case to be considered rape", "BNS", "63"),
     ("when is it rape", "BNS", "63"),
     ("punishment for rape", "BNS", "64"),
-    # CrPC
+    ("rape", "BNS", "64"),
+
+    # =================== CrPC ===================
     ("fir", "criminal_procedure", "154"),
     ("first information report", "criminal_procedure", "154"),
     ("bail", "criminal_procedure", "436"),
     ("arrest without warrant", "criminal_procedure", "41"),
-    # BNSS
+
+    # =================== BNSS ===================
     ("fir", "Bharatiya_Nagarik", "173"),
     ("arrest without warrant", "Bharatiya_Nagarik", "35"),
-    # CPC
+
+    # =================== CPC ===================
     ("place of suing", "civil_procedure", "15"),
     ("where can a civil suit be filed", "civil_procedure", "15"),
     ("res judicata", "civil_procedure", "11"),
     ("res sub judice", "civil_procedure", "10"),
-    # Evidence Act
+
+    # =================== Evidence Act ===================
     ("primary evidence", "iea_1872", "62"),
     ("secondary evidence", "iea_1872", "63"),
     ("electronic evidence", "iea_1872", "65B"),
     ("burden of proof", "iea_1872", "101"),
-    # Constitution
+
+    # =================== Constitution ===================
     ("right to education", "constitution", "21A"),
     ("right to life", "constitution", "21"),
     ("equality before law", "constitution", "14"),
     ("freedom of speech", "constitution", "19"),
     ("constitutional remedies", "constitution", "32"),
     ("uniform civil code", "constitution", "44"),
-    # PESA
+
+    # =================== PESA ===================
     ("where does pesa apply", "pesa", "3"),
     ("pesa applicability", "pesa", "3"),
-    # CG Rent Control
+
+    # =================== CG Rent Control ===================
     ("grounds for eviction", "Rent_Control", "11"),
     ("eviction grounds", "Rent_Control", "11"),
     ("evict tenant", "Rent_Control", "11"),
     ("habitual defaulter", "Rent_Control", "11"),
     ("eviction", "Rent_Control", "11"),
-    # CG Land Revenue
+
+    # =================== CG Land Revenue ===================
     ("mutation", "Land_Revenue", "109"),
     ("partition", "Land_Revenue", "178"),
 ]
 
+
 def detect_section_hint(query, source_filter):
-    if not source_filter:
-        return None
+    """
+    Returns (section, source_hint) if a hint matches, else (None, None).
+
+    Behaviour:
+      - If source_filter is provided, only hints matching that source fire.
+      - If source_filter is None, any hint can fire, and the hint's own
+        source fragment is returned so the caller can adopt it.
+    """
     q = query.lower()
-    sf = source_filter.lower()
+    sf = source_filter.lower() if source_filter else ""
     for phrase, src_hint, section in SECTION_HINTS:
-        if phrase in q and src_hint.lower() in sf:
-            return section
-    return None
+        if phrase in q:
+            if sf and src_hint.lower() not in sf:
+                continue
+            return section, src_hint
+    return None, None
+
 
 # ----------------------------
 # BM25 setup
@@ -243,6 +271,7 @@ def get_filtered_bm25(source_fragment, doc_type_filter=None):
     result = (filtered_bm25, [chunks[i] for i in indices], indices)
     _bm25_cache[key] = result
     return result
+
 
 # ----------------------------
 # Chroma + models
@@ -379,16 +408,23 @@ def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
 # Hybrid search
 # ----------------------------
 def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rerank=True):
+    # 1. Act-source detection
     if source_filter is None:
         source_filter = detect_source_filter(query)
+
+    # 2. Judgment-mode detection
     if doc_type_filter is None and query_wants_judgments(query):
         doc_type_filter = "judgment"
-        # Case-law query: ignore act-source filter, restrict to judgments only
         source_filter = None
 
+    # 3. Section detection
     target_section = extract_section_from_query(query)
-    if not target_section:
-        target_section = detect_section_hint(query, source_filter)
+    hint_source = None
+    if not target_section and doc_type_filter != "judgment":
+        target_section, hint_source = detect_section_hint(query, source_filter)
+        # If a hint pointed to an act and we had no source filter, adopt it
+        if target_section and hint_source and not source_filter:
+            source_filter = hint_source
 
     final_results = []
     seen_ids = set()
@@ -472,7 +508,8 @@ if __name__ == "__main__":
         "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
         "What have CG courts said about land acquisition compensation?",
         "Case law on rent control eviction in Chhattisgarh.",
-        "What have CG courts said about land revenue disputes?",
+        "conditions for a case to be considered rape",         # <-- new fix
+        "what constitutes rape",                                # <-- new fix
     ]
     for q in test_queries:
         sf = detect_source_filter(q)
