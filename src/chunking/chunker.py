@@ -158,9 +158,9 @@ def chunk_judgment(text, source):
 
     matches = []
     for pat in patterns:
-        matches = list(pat.finditer(text))
-        if len(matches) >= 5:
-            break
+        m = list(pat.finditer(text))
+        if len(m) > len(matches):
+            matches = m
 
     chunks = []
     if not matches:
