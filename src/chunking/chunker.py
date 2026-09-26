@@ -119,8 +119,18 @@ def split_constitution_subsections(chunks):
 
     return result
 
+
+# ------------------------------------------------------------
+# UPDATED: handles "2[304B." amendment-insertion markers
+# ------------------------------------------------------------
 def chunk_generic_act(text, source):
-    pattern = re.compile(r'^\s*(?:(?:Section|Rule)\s+)?(\d+[A-Z]*)\.\s+', re.MULTILINE)
+    # Allow an optional footnote marker like "1[" or "2[" or "12[" before the
+    # section number. This is how Indian PDFs mark sections inserted by
+    # subsequent amendments (e.g. IPC 304B, IPC 498A, IPC 376A-D).
+    pattern = re.compile(
+        r'^\s*(?:\d{1,3}\[)?(?:(?:Section|Rule)\s+)?(\d+[A-Z]*)\.\s+',
+        re.MULTILINE
+    )
     matches = list(pattern.finditer(text))
     if not matches:
         pattern = re.compile(r'^\s*(\d+[A-Z]*)\.\s+', re.MULTILINE)
@@ -132,6 +142,9 @@ def chunk_generic_act(text, source):
         start = match.start()
         end = matches[i+1].start() if i+1 < len(matches) else len(text)
         chunk_text = text[start:end].strip()
+        # Strip a leading footnote marker from the chunk text so the
+        # citation reads cleanly as "304B. Dowry death.—..." not "2[304B..."
+        chunk_text = re.sub(r'^\d{1,3}\[\s*', '', chunk_text)
         chunks.append({
             "text": chunk_text,
             "metadata": {
@@ -211,7 +224,6 @@ def main():
     }
 
     for filename, entry in extracted.items():
-        # Handle both old (str) and new (dict) formats defensively
         if isinstance(entry, dict):
             text = entry.get("text", "")
             doc_type = entry.get("doc_type", "act")
