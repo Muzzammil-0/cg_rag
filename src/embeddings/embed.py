@@ -11,7 +11,7 @@ def load_chunks(jsonl_path):
     return chunks
 
 def main():
-    chunks_file = Path("data/processed/chunks.jsonl")
+    chunks_file = Path("data/processed/chunks_v2.jsonl")
     db_path = Path("data/vector_db")
     collection_name = "legal_chunks"
     batch_size = 5000  # below Chroma's max batch size

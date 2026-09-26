@@ -13,7 +13,7 @@ def get_chroma_path():
 
 def build_if_needed():
     db_path = get_chroma_path()
-    chunks_file = Path("data/processed/chunks.jsonl")
+    chunks_file = Path("data/processed/chunks_v2.jsonl")
 
     client = chromadb.PersistentClient(path=str(db_path))
 
@@ -25,7 +25,7 @@ def build_if_needed():
     except Exception:
         pass
 
-    print("Building ChromaDB from chunks.jsonl...")
+    print("Building ChromaDB from chunks_v2.jsonl...")
     chunks = []
     with open(chunks_file, "r", encoding="utf-8") as f:
         for line in f:

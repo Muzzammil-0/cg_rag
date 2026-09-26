@@ -379,7 +379,7 @@ def detect_section_hint(query, source_filter):
 # ----------------------------
 # BM25 setup
 # ----------------------------
-chunks = load_chunks("data/processed/chunks.jsonl")
+chunks = load_chunks("data/processed/chunks_v2.jsonl")
 corpus = [chunk["text"] for chunk in chunks]
 tokenized_corpus = [tokenize(doc) for doc in corpus]
 bm25 = BM25Okapi(tokenized_corpus)

@@ -196,7 +196,7 @@ def chunk_judgment(text, source):
 
 def main():
     input_file = Path("data/processed/extracted_text.json")
-    output_file = Path("data/processed/chunks.jsonl")
+    output_file = Path("data/processed/chunks_v2.jsonl")
 
     with open(input_file, "r", encoding="utf-8") as f:
         extracted = json.load(f)
