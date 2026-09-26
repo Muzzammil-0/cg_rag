@@ -33,16 +33,41 @@ def tokenize(text):
 # Source (act) detection
 # ----------------------------
 SOURCE_PATTERNS = [
+    # ========== New criminal law triad ==========
     (["bnss", "bharatiya nagarik suraksha", "nagarik suraksha"], "Bharatiya_Nagarik"),
     (["bsa", "bharatiya sakshya", "sakshya"], "BSA"),
     (["bns", "bharatiya nyaya sanhita", "nyaya sanhita"], "BNS"),
+
+    # ========== Old criminal law ==========
     (["ipc", "indian penal"], "IPC_eng"),
     (["crpc", "criminal procedure"], "criminal_procedure"),
-    (["cpc", "civil procedure"], "civil_procedure"),
     (["evidence act", "indian evidence", "iea"], "iea_1872"),
+
+    # ========== Civil / Constitutional ==========
+    (["cpc", "civil procedure"], "civil_procedure"),
     (["constitution"], "constitution"),
+
+    # ========== Central acts - NEW ==========
+    (["hindu marriage"], "Hindu_Marriage"),
+    (["special marriage"], "Special_Marriage"),
+    (["dowry prohibition", "dowry"], "Dowry_Prohibition"),
+    (["domestic violence", "dv act"], "Domestic_Violence"),
+    (["child marriage", "pcma", "prohibition of child marriage"], "Child_Marriage"),
+    (["negotiable instrument", "ni act", "cheque bounce", "section 138", "cheque dishonour", "dishonour of cheque"], "Negotiable"),
+    (["motor vehicle", "motor vehicles", "mv act", "motor accident", "motor claim"], "Motor"),
+    (["ndps", "narcotic", "psychotropic"], "Narcotic"),
+    (["pocso", "protection of children from sexual"], "pocso"),
+    (["arms act"], "ArmsAct"),
+    (["prevention of corruption", "pc act", "corruption act"], "Corruption"),
+    (["sc st act", "sc/st", "scheduled castes", "atrocities act", "sc st atrocities", "sc/st atrocities"], "Scheduled"),
+    (["juvenile justice", "jj act", "juvenile"], "Juvenile"),
+    (["maintenance and welfare of parents", "parents act"], "Maintenance_and_Welfare"),
+
+    # ========== Central acts - existing ==========c
     (["pesa"], "pesa"),
     (["forest rights", "fra rules", "fra rule"], "FRA"),
+
+    # ========== CG acts ==========
     (["land revenue", "cg land revenue"], "Land_Revenue"),
     (["excise"], "Excise"),
     (["rent control"], "Rent_Control"),
@@ -51,7 +76,7 @@ SOURCE_PATTERNS = [
     (["tendu"], "tendu"),
     (["vanopaj"], "vanopaj"),
     (["lok sewa", "lok-sewa"], "Lok-Sewa"),
-    (["special court", "special courts"], "Special Courts"),
+    (["special court", "special courts"], "Special Courts"),   # after special marriage
     (["cattle preservation", "agricultural cattle"], "Cattle"),
 ]
 
@@ -133,6 +158,8 @@ SECTION_HINTS = [
     ("ingredients of murder", "IPC", "300"),
     ("murder definition", "IPC", "300"),
     ("murder", "IPC", "302"),
+    ("dowry death", "IPC", "304B"),
+    ("abetment of suicide", "IPC", "306"),
     ("definition of theft", "IPC", "378"),
     ("punishment for theft", "IPC", "379"),
     ("punishment for cheating", "IPC", "420"),
@@ -149,6 +176,7 @@ SECTION_HINTS = [
     ("when is it rape", "IPC", "375"),
     ("punishment for rape", "IPC", "376"),
     ("rape", "IPC", "376"),
+    ("dowry cruelty", "IPC", "498A"),
 
     # =================== BNS ===================
     ("definition of theft", "BNS", "303"),
@@ -199,6 +227,100 @@ SECTION_HINTS = [
     ("constitutional remedies", "constitution", "32"),
     ("uniform civil code", "constitution", "44"),
 
+    # =================== Hindu Marriage Act ===================
+    ("conditions for hindu marriage", "Hindu_Marriage", "5"),
+    ("valid hindu marriage", "Hindu_Marriage", "5"),
+    ("restitution of conjugal rights", "Hindu_Marriage", "9"),
+    ("judicial separation", "Hindu_Marriage", "10"),
+    ("grounds for divorce", "Hindu_Marriage", "13"),
+    ("divorce", "Hindu_Marriage", "13"),
+    ("maintenance pendente lite", "Hindu_Marriage", "24"),
+    ("permanent alimony", "Hindu_Marriage", "25"),
+    ("custody of children", "Hindu_Marriage", "26"),
+    ("maintenance provision", "Hindu_Marriage", "24"),
+    ("maintenance under hindu", "Hindu_Marriage", "24"),
+    ("maintenance after divorce", "Hindu_Marriage", "25"),
+    ("alimony", "Hindu_Marriage", "25"),
+
+
+    # =================== Special Marriage Act ===================
+    ("conditions for special marriage", "Special_Marriage", "4"),
+    ("special marriage registration", "Special_Marriage", "4"),
+
+    # =================== Dowry Prohibition Act ===================
+    ("penalty for giving dowry", "Dowry_Prohibition", "3"),
+    ("penalty for demanding dowry", "Dowry_Prohibition", "4"),
+    ("dowry prohibition punishment", "Dowry_Prohibition", "3"),
+
+    # =================== Domestic Violence Act ===================
+    ("application to magistrate", "Domestic_Violence", "12"),
+    ("protection order", "Domestic_Violence", "18"),
+    ("residence order", "Domestic_Violence", "19"),
+    ("monetary relief", "Domestic_Violence", "20"),
+    ("custody order", "Domestic_Violence", "21"),
+
+    # =================== Child Marriage Act ===================
+    ("punishment for child marriage", "Child_Marriage", "9"),
+    ("child marriage punishment", "Child_Marriage", "9"),
+
+    # =================== Negotiable Instruments Act ===================
+    ("cheque bounce", "Negotiable", "138"),
+    ("dishonour of cheque", "Negotiable", "138"),
+    ("section 138 ni act", "Negotiable", "138"),
+    ("cheque dishonour punishment", "Negotiable", "138"),
+    ("notice for cheque bounce", "Negotiable", "138"),
+
+    # =================== Motor Vehicles Act ===================
+    ("motor accident compensation", "Motor", "166"),
+    ("accident claim", "Motor", "166"),
+    ("claim petition motor", "Motor", "166"),
+    ("motor accident appeal", "Motor", "173"),
+    ("motor accident", "Motor", "166"),
+    ("motor vehicle accident", "Motor", "166"),
+    ("compensation for accident", "Motor", "166"),
+    ("accident compensation", "Motor", "166"),
+    
+    # =================== NDPS Act ===================
+    ("ndps offence", "Narcotic", "8"),
+    ("punishment for cannabis", "Narcotic", "20"),
+    ("punishment for heroin", "Narcotic", "21"),
+    ("ndps consumption", "Narcotic", "27"),
+    ("ndps bail", "Narcotic", "37"),
+    ("possession of cannabis", "Narcotic", "20"),
+    ("cannabis", "Narcotic", "20"),
+    ("ganja", "Narcotic", "20"),
+    ("heroin", "Narcotic", "21"),
+    ("possession of drugs", "Narcotic", "20"),
+
+    # =================== POCSO Act ===================
+    ("penetrative sexual assault", "pocso", "3"),
+    ("pocso punishment", "pocso", "4"),
+    ("aggravated penetrative", "pocso", "5"),
+    ("sexual assault on child", "pocso", "7"),
+    ("sexual harassment child", "pocso", "11"),
+
+    # =================== Arms Act ===================
+    ("illegal arms", "ArmsAct", "25"),
+    ("arms act punishment", "ArmsAct", "25"),
+    ("using arms", "ArmsAct", "27"),
+
+    # =================== Prevention of Corruption Act ===================
+    ("bribery public servant", "Corruption", "7"),
+    ("criminal misconduct", "Corruption", "13"),
+    ("corruption punishment", "Corruption", "7"),
+
+    # =================== SC/ST Act ===================
+    ("atrocities on sc st", "Scheduled", "3"),
+    ("sc st atrocities", "Scheduled", "3"),
+
+    # =================== Juvenile Justice Act ===================
+    ("heinous offence juvenile", "Juvenile", "74"),
+    ("juvenile punishment", "Juvenile", "75"),
+
+    # =================== Maintenance of Parents Act ===================
+    ("maintenance of parents", "Maintenance_and_Welfare", "4"),
+    ("neglect of parents", "Maintenance_and_Welfare", "5"),
+
     # =================== PESA ===================
     ("where does pesa apply", "pesa", "3"),
     ("pesa applicability", "pesa", "3"),
@@ -213,6 +335,26 @@ SECTION_HINTS = [
     # =================== CG Land Revenue ===================
     ("mutation", "Land_Revenue", "109"),
     ("partition", "Land_Revenue", "178"),
+
+    # NDPS alternatives
+    ("cannabis possession", "Narcotic", "20"),
+    ("punishment for cannabis", "Narcotic", "20"),
+    ("ndps cannabis", "Narcotic", "20"),
+    ("ganja", "Narcotic", "20"),
+
+    # Hindu Marriage maintenance
+    ("maintenance under hindu", "Hindu_Marriage", "24"),
+    ("hindu marriage maintenance", "Hindu_Marriage", "24"),
+    ("alimony", "Hindu_Marriage", "25"),
+
+    # Dowry synonyms
+    ("punishment for demanding dowry", "Dowry_Prohibition", "4"),
+    ("punishment for giving dowry", "Dowry_Prohibition", "3"),
+
+    # Motor accident
+    ("motor accident compensation", "Motor", "166"),
+    ("compensation for motor accident", "Motor", "166"),
+    ("motor accident claim", "Motor", "166"),
 ]
 
 
@@ -233,7 +375,6 @@ def detect_section_hint(query, source_filter):
                 continue
             return section, src_hint
     return None, None
-
 
 # ----------------------------
 # BM25 setup
@@ -408,21 +549,17 @@ def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
 # Hybrid search
 # ----------------------------
 def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rerank=True):
-    # 1. Act-source detection
     if source_filter is None:
         source_filter = detect_source_filter(query)
 
-    # 2. Judgment-mode detection
     if doc_type_filter is None and query_wants_judgments(query):
         doc_type_filter = "judgment"
         source_filter = None
 
-    # 3. Section detection
     target_section = extract_section_from_query(query)
     hint_source = None
     if not target_section and doc_type_filter != "judgment":
         target_section, hint_source = detect_section_hint(query, source_filter)
-        # If a hint pointed to an act and we had no source filter, adopt it
         if target_section and hint_source and not source_filter:
             source_filter = hint_source
 
@@ -502,14 +639,20 @@ def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rera
 # ----------------------------
 if __name__ == "__main__":
     test_queries = [
+        # Existing
         "What is the punishment for murder under BNS?",
-        "What is the definition of theft under IPC?",
-        "What is the procedure for registering an FIR under CrPC?",
-        "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
-        "What have CG courts said about land acquisition compensation?",
-        "Case law on rent control eviction in Chhattisgarh.",
-        "conditions for a case to be considered rape",         # <-- new fix
-        "what constitutes rape",                                # <-- new fix
+        "What is the grounds for eviction under the Chhattisgarh Rent Control Act?",
+        # New acts
+        "What is the punishment for cheque bounce under Section 138 NI Act?",
+        "What is the grounds for divorce under Hindu Marriage Act?",
+        "What is the punishment under NDPS Act for possession of cannabis?",
+        "What is the punishment for illegal arms under Arms Act?",
+        "What is the punishment under POCSO for aggravated penetrative sexual assault?",
+        "What is the procedure for protection order under Domestic Violence Act?",
+        "What is the maintenance provision under Hindu Marriage Act?",
+        "What is the punishment for demanding dowry?",
+        "What is the compensation provision for motor accident?",
+        "What is the SC ST atrocities punishment?",
     ]
     for q in test_queries:
         sf = detect_source_filter(q)
