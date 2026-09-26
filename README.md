@@ -175,7 +175,7 @@ Then run the pipeline:
 
 ```bash
 python src/ingestion/extract_pdf.py      # PDFs → extracted_text.json
-python src/chunking/chunker.py           # → chunks.jsonl
+python src/chunking/chunker.py           # → chunks_v2.jsonl
 python src/embeddings/embed.py           # → ChromaDB
 
 python app_gradio.py                     # Gradio UI
@@ -218,7 +218,7 @@ cg_rag/
 ├── app_gradio.py                 # Gradio UI (HF Spaces entry point)
 ├── data/
 │   ├── raw/                      # Source PDFs (gitignored)
-│   ├── processed/                # chunks.jsonl (tracked via LFS)
+│   ├── processed/                # chunks_v2.jsonl (tracked via LFS)
 │   ├── vector_db/                # ChromaDB (gitignored)
 │   └── evaluation/               # Eval sets + scripts
 ├── src/
@@ -237,9 +237,9 @@ Notes on Deployment
 
 The Space runs on HuggingFace's free ZeroGPU tier. To satisfy the ZeroGPU startup scan (which expects a @spaces.GPU decorated function), a dummy no-op function is registered at the top of app_gradio.py. All computation runs on CPU.
 
-The chunks.jsonl file is ~18 MB and tracked via Git LFS — plain Git rejects files over 10 MB.
+The chunks_v2.jsonl file is ~18 MB and tracked via Git LFS — plain Git rejects files over 10 MB.
 
-Cold start after 48 hours of inactivity takes ~45 seconds (model download + ChromaDB rebuild from chunks.jsonl).
+Cold start after 48 hours of inactivity takes ~45 seconds (model download + ChromaDB rebuild from chunks_v2.jsonl).
 
 ---
 

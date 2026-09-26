@@ -2,7 +2,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-CHUNKS_PATH = Path("data/processed/chunks.jsonl")
+CHUNKS_PATH = Path("data/processed/chunks_v2.jsonl")
 
 chunks = []
 with open(CHUNKS_PATH, "r", encoding="utf-8") as f:
