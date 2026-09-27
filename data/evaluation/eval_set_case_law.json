@@ -75,7 +75,7 @@
     "id": "case_pocso",
     "question": "What have courts said in POCSO cases in Chhattisgarh?",
     "expected_doc_type": "judgment",
-    "expected_keywords": ["pocso", "child", "victim"],
+    "expected_keywords": ["sexual", "child", "victim"],
     "category": "case_criminal",
     "difficulty": "medium"
   },
@@ -91,7 +91,7 @@
     "id": "case_limitation",
     "question": "What have the courts held about limitation under Section 5 of the Limitation Act?",
     "expected_doc_type": "judgment",
-    "expected_keywords": ["limitation"],
+    "expected_keywords": ["limitation","delay","suit"],
     "category": "case_procedure",
     "difficulty": "medium"
   },

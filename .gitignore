@@ -10,3 +10,15 @@ data/vector_db/
 data/rag.db*
 data/evaluation/results.json
 data/evaluation/case_law_results.json
+
+data/classifier/model/checkpoints/
+
+data/classifier/model/*.bin
+
+data/classifier/debug_failures.jsonl
+
+data/classifier/progress.json
+
+data/classifier/training_data_original.jsonl
+
+data/processed/chunks.jsonl
