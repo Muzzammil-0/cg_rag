@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+
 import json
 import os as _os
 import re
@@ -12,6 +16,12 @@ try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
     nltk.download('stopwords', quiet=True)
+
+from src.retrieval.query_analyzer import (extract_act_section,
+                                          get_fragments_for_act,
+                                          refine_section_with_llm,
+                                          act_name_for_fragment,
+)
 
 # ----------------------------
 # Load chunks
@@ -637,12 +647,38 @@ def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rera
         if target_section and hint_source and not source_filter:
             source_filter = hint_source
 
-    # TIER 2: classifier fallback (only if no hints fired and not judgment mode)
+    # TIER 2: classifier fallback (fast, moderate accuracy)
     if not source_filter and not target_section and doc_type_filter != "judgment":
         classifier_fragments = classifier_route(query)
         if classifier_fragments:
             source_filter = classifier_fragments  # list of fragments
 
+    # TIER 2.5: section refinement via LLM
+    # Fires when we have a source_filter (from hints or classifier) but no
+    # target_section. Asks the LLM which section of the chosen act answers
+    # the query. Only runs for single-act filters — merged classes skip it.
+    if source_filter and not target_section and doc_type_filter != "judgment":
+        fragments = source_filter if isinstance(source_filter, (list, tuple)) else [source_filter]
+        #print(f"tier2.5] source_filter={fragments}, len={len(fragments)}")
+        if len(fragments) == 1:
+            act_name = act_name_for_fragment(fragments[0])
+            #print(f"[tier2.5] act_name={act_name}")
+            if act_name:
+                llm_sec = refine_section_with_llm(query, act_name)
+                #print(f"[tier2.5] llm_sec={llm_sec}")
+                if llm_sec:
+                    target_section = llm_sec
+
+    # TIER 3: LLM act + section extraction (slower)
+    # Fires only when hints and classifier both failed to route at all.
+    if not source_filter and not target_section and doc_type_filter != "judgment":
+        llm_act, llm_section = extract_act_section(query)
+        if llm_act:
+            frags = get_fragments_for_act(llm_act)
+            if frags:
+                source_filter = frags
+                if llm_section:
+                    target_section = llm_section
     final_results = []
     seen_ids = set()
 
@@ -732,6 +768,10 @@ if __name__ == "__main__":
         "What are the penalties for carrying an unlicensed gun?",
         # Semantic only (no hint, no confident classifier)
         "What is the punishment for jaywalking in Chhattisgarh?",
+        "What are the penalties for carrying an unlicensed gun?",
+        "What is the punishment for stalking?",
+        "What is the procedure to get maintenance from my husband?",
+        "What happens if I breach a protection order?",
     ]
     for q in test_queries:
         print(f"\n=== {q} ===")
