@@ -1,0 +1,30 @@
+{
+  "val": {
+    "eval_loss": 1.3822686672210693,
+    "eval_accuracy": 0.7098445595854922,
+    "eval_f1_macro": 0.6297287919482192,
+    "eval_f1_weighted": 0.6892759640942961,
+    "eval_runtime": 9.1656,
+    "eval_samples_per_second": 21.057,
+    "eval_steps_per_second": 0.764,
+    "epoch": 10.0
+  },
+  "test": {
+    "accuracy": 0.6994818652849741,
+    "f1_macro": 0.6126762035479141
+  },
+  "num_classes": 26,
+  "num_train": 1651,
+  "num_val": 193,
+  "num_test": 193,
+  "small_classes": [
+    [
+      "CG Tendu Patta Act",
+      3
+    ],
+    [
+      "CG Vanopaj Act",
+      3
+    ]
+  ]
+}

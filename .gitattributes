@@ -1,0 +1,2 @@
+data/classifier/model/*.safetensors filter=lfs diff=lfs merge=lfs -text
+data/classifier/model/*.bin filter=lfs diff=lfs merge=lfs -text

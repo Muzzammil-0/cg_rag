@@ -30,44 +30,40 @@ def tokenize(text):
     return [_stemmer.stem(t) for t in tokens]
 
 # ----------------------------
-# Source (act) detection
+# Source (act) detection — HINTS TIER
 # ----------------------------
 SOURCE_PATTERNS = [
-    # ========== New criminal law triad ==========
+    # New criminal law triad
     (["bnss", "bharatiya nagarik suraksha", "nagarik suraksha"], "Bharatiya_Nagarik"),
     (["bsa", "bharatiya sakshya", "sakshya"], "BSA"),
     (["bns", "bharatiya nyaya sanhita", "nyaya sanhita"], "BNS"),
-
-    # ========== Old criminal law ==========
+    # Old criminal law
     (["ipc", "indian penal"], "IPC_eng"),
     (["crpc", "criminal procedure"], "criminal_procedure"),
     (["evidence act", "indian evidence", "iea"], "iea_1872"),
-
-    # ========== Civil / Constitutional ==========
+    # Civil / Constitutional
     (["cpc", "civil procedure"], "civil_procedure"),
     (["constitution"], "constitution"),
-
-    # ========== Central acts - NEW ==========
+    # Central acts
     (["hindu marriage"], "Hindu_Marriage"),
     (["special marriage"], "Special_Marriage"),
     (["dowry prohibition", "dowry"], "Dowry_Prohibition"),
     (["domestic violence", "dv act"], "Domestic_Violence"),
     (["child marriage", "pcma", "prohibition of child marriage"], "Child_Marriage"),
-    (["negotiable instrument", "ni act", "cheque bounce", "section 138", "cheque dishonour", "dishonour of cheque"], "Negotiable"),
+    (["negotiable instrument", "ni act", "cheque bounce", "section 138",
+      "cheque dishonour", "dishonour of cheque"], "Negotiable"),
     (["motor vehicle", "motor vehicles", "mv act", "motor accident", "motor claim"], "Motor"),
     (["ndps", "narcotic", "psychotropic"], "Narcotic"),
     (["pocso", "protection of children from sexual"], "pocso"),
     (["arms act"], "ArmsAct"),
     (["prevention of corruption", "pc act", "corruption act"], "Corruption"),
-    (["sc st act", "sc/st", "scheduled castes", "atrocities act", "sc st atrocities", "sc/st atrocities"], "Scheduled"),
+    (["sc st act", "sc/st", "scheduled castes", "atrocities act",
+      "sc st atrocities", "sc/st atrocities"], "Scheduled"),
     (["juvenile justice", "jj act", "juvenile"], "Juvenile"),
     (["maintenance and welfare of parents", "parents act"], "Maintenance_and_Welfare"),
-
-    # ========== Central acts - existing ==========c
     (["pesa"], "pesa"),
     (["forest rights", "fra rules", "fra rule"], "FRA"),
-
-    # ========== CG acts ==========
+    # CG acts
     (["land revenue", "cg land revenue"], "Land_Revenue"),
     (["excise"], "Excise"),
     (["rent control"], "Rent_Control"),
@@ -76,7 +72,7 @@ SOURCE_PATTERNS = [
     (["tendu"], "tendu"),
     (["vanopaj"], "vanopaj"),
     (["lok sewa", "lok-sewa"], "Lok-Sewa"),
-    (["special court", "special courts"], "Special Courts"),   # after special marriage
+    (["special court", "special courts"], "Special Courts"),
     (["cattle preservation", "agricultural cattle"], "Cattle"),
 ]
 
@@ -88,39 +84,147 @@ def detect_source_filter(query):
                 return source_fragment
     return None
 
-def matches_source(metadata, source_fragment):
-    src = metadata.get("source", "")
-    return source_fragment.lower() in src.lower()
+
+def matches_source(metadata, source_filter):
+    """source_filter can be a string OR a list/tuple of strings."""
+    src = metadata.get("source", "").lower()
+    if not source_filter:
+        return True
+    if isinstance(source_filter, (list, tuple, set)):
+        return any(str(f).lower() in src for f in source_filter)
+    return str(source_filter).lower() in src
+
+
+# ----------------------------
+# Classifier fallback — CLASSIFIER TIER
+# ----------------------------
+CLASSIFIER_DIR = Path(__file__).resolve().parents[2] / "data" / "classifier" / "model"
+CLASSIFIER_CONFIDENCE_THRESHOLD = 0.30
+
+# Maps classifier act names → source-fragment lists.
+# Merged classes (Criminal Code, Criminal Procedure, etc.) map to multiple sources.
+CLASSIFIER_ACT_TO_FRAGMENTS = {
+    "Arms Act": ["ArmsAct"],
+    "BNS": ["BNS"],
+    "BNSS": ["Bharatiya_Nagarik"],
+    "BSA": ["BSA"],
+    "CG Cattle Preservation Rules": ["Cattle"],
+    "CG Excise Act": ["Excise"],
+    "CG Land Revenue Code": ["Land_Revenue"],
+    "CG Lok Sewa Guarantee Act": ["Lok-Sewa"],
+    "CG Municipalities Act": ["Municipalities"],
+    "CG Panchayat Raj Act": ["Panchayat"],
+    "CG Rent Control Act": ["Rent_Control"],
+    "CG Special Courts Act": ["Special Courts"],
+    "CG Tendu Patta Act": ["tendu"],
+    "CG Vanopaj Act": ["vanopaj"],
+    "CPC": ["civil_procedure"],
+    "Criminal Code": ["IPC_eng", "BNS"],
+    "Criminal Procedure": ["criminal_procedure", "Bharatiya_Nagarik"],
+    "Domestic Violence Act": ["Domestic_Violence"],
+    "Dowry Prohibition Act": ["Dowry_Prohibition"],
+    "Evidence Law": ["iea_1872", "BSA"],
+    "Forest Rights Act Rules": ["FRA"],
+    "Hindu Marriage Act": ["Hindu_Marriage"],
+    "Juvenile Justice Act": ["Juvenile"],
+    "Marriage Law": ["Hindu_Marriage", "Special_Marriage"],
+    "Motor Vehicles Act": ["Motor"],
+    "Negotiable Instruments Act": ["Negotiable"],
+    "PESA": ["pesa"],
+    "POCSO Act": ["pocso"],
+    "Prevention of Corruption Act": ["Corruption"],
+    "SC/ST (PoA) Act": ["Scheduled"],
+    "Special Marriage Act": ["Special_Marriage"],
+}
+
+_classifier_bundle = None   # None = not loaded yet, False = failed/unavailable
+
+
+def _load_classifier():
+    """Lazy-load the act classifier. Returns bundle dict or False."""
+    global _classifier_bundle
+    if _classifier_bundle is not None:
+        return _classifier_bundle
+
+    if not CLASSIFIER_DIR.exists():
+        _classifier_bundle = False
+        return False
+
+    try:
+        import torch
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+        tokenizer = AutoTokenizer.from_pretrained(str(CLASSIFIER_DIR))
+        model = AutoModelForSequenceClassification.from_pretrained(str(CLASSIFIER_DIR))
+        model.eval()
+
+        labels_path = CLASSIFIER_DIR / "act_labels.json"
+        with open(labels_path, "r", encoding="utf-8") as f:
+            labels = json.load(f)
+
+        _classifier_bundle = {
+            "tokenizer": tokenizer,
+            "model": model,
+            "idx_to_act": {int(k): v for k, v in labels["idx_to_act"].items()},
+            "torch": torch,
+        }
+        print("[classifier] loaded")
+    except Exception as e:
+        print(f"[classifier] failed to load: {e}")
+        _classifier_bundle = False
+
+    return _classifier_bundle
+
+def classifier_route(query, threshold=CLASSIFIER_CONFIDENCE_THRESHOLD):
+    """
+    Returns a list of source fragments if the classifier is confident
+    AND the predicted act maps to at least one source. Otherwise None.
+    """
+    bundle = _load_classifier()
+    if not bundle:
+        return None
+
+    try:
+        tok = bundle["tokenizer"]
+        model = bundle["model"]
+        idx_to_act = bundle["idx_to_act"]
+        torch = bundle["torch"]
+
+        inputs = tok(query, return_tensors="pt", truncation=True,
+                     padding="max_length", max_length=64)
+        with torch.no_grad():
+            logits = model(**inputs).logits
+            probs = torch.softmax(logits, dim=-1)[0]
+            top_prob, top_idx = float(probs.max()), int(probs.argmax())
+
+        if top_prob < threshold:
+            return None
+
+        act = idx_to_act.get(top_idx)
+        if not act:
+            return None
+
+        fragments = CLASSIFIER_ACT_TO_FRAGMENTS.get(act)
+        if not fragments:
+            return None
+
+        return fragments
+    except Exception as e:
+        print(f"[classifier] inference failed: {e}")
+        return None
+
 
 # ----------------------------
 # Judgment-query detection
 # ----------------------------
 JUDGMENT_PATTERNS = [
-    "what have courts said",
-    "what have cg courts",
-    "what have the courts",
-    "what has the court said",
-    "what have courts held",
-    "what have the courts held",
-    "what has the court held",
-    "what have the high court",
-    "what has the high court",
-    "case law",
-    "precedent",
-    "judgment",
-    "judgements",
-    "judgments",
-    "high court held",
-    "high court said",
-    "high court observed",
-    "courts have dealt",
-    "courts have interpreted",
-    "courts have ruled",
-    "court has ruled",
-    "case law on",
-    "judgments on",
-    "ruling",
-    "rulings",
+    "what have courts said", "what have cg courts", "what have the courts",
+    "what has the court said", "what have courts held", "what have the courts held",
+    "what has the court held", "what have the high court", "what has the high court",
+    "case law", "precedent", "judgment", "judgements", "judgments",
+    "high court held", "high court said", "high court observed",
+    "courts have dealt", "courts have interpreted", "courts have ruled",
+    "court has ruled", "case law on", "judgments on", "ruling", "rulings",
     "has the court held",
 ]
 
@@ -145,7 +249,7 @@ def extract_section_from_query(query):
 # Synonym hints
 # ----------------------------
 SECTION_HINTS = [
-    # =================== IPC ===================
+    # IPC
     ("common intention", "IPC", "34"),
     ("criminal conspiracy", "IPC", "120B"),
     ("abetment", "IPC", "107"),
@@ -177,8 +281,7 @@ SECTION_HINTS = [
     ("punishment for rape", "IPC", "376"),
     ("rape", "IPC", "376"),
     ("dowry cruelty", "IPC", "498A"),
-
-    # =================== BNS ===================
+    # BNS
     ("definition of theft", "BNS", "303"),
     ("attempt to murder", "BNS", "109"),
     ("definition of murder", "BNS", "101"),
@@ -196,38 +299,32 @@ SECTION_HINTS = [
     ("when is it rape", "BNS", "63"),
     ("punishment for rape", "BNS", "64"),
     ("rape", "BNS", "64"),
-
-    # =================== CrPC ===================
+    # CrPC
     ("fir", "criminal_procedure", "154"),
     ("first information report", "criminal_procedure", "154"),
     ("bail", "criminal_procedure", "436"),
     ("arrest without warrant", "criminal_procedure", "41"),
-
-    # =================== BNSS ===================
+    # BNSS
     ("fir", "Bharatiya_Nagarik", "173"),
     ("arrest without warrant", "Bharatiya_Nagarik", "35"),
-
-    # =================== CPC ===================
+    # CPC
     ("place of suing", "civil_procedure", "15"),
     ("where can a civil suit be filed", "civil_procedure", "15"),
     ("res judicata", "civil_procedure", "11"),
     ("res sub judice", "civil_procedure", "10"),
-
-    # =================== Evidence Act ===================
+    # Evidence Act
     ("primary evidence", "iea_1872", "62"),
     ("secondary evidence", "iea_1872", "63"),
     ("electronic evidence", "iea_1872", "65B"),
     ("burden of proof", "iea_1872", "101"),
-
-    # =================== Constitution ===================
+    # Constitution
     ("right to education", "constitution", "21A"),
     ("right to life", "constitution", "21"),
     ("equality before law", "constitution", "14"),
     ("freedom of speech", "constitution", "19"),
     ("constitutional remedies", "constitution", "32"),
     ("uniform civil code", "constitution", "44"),
-
-    # =================== Hindu Marriage Act ===================
+    # Hindu Marriage Act
     ("conditions for hindu marriage", "Hindu_Marriage", "5"),
     ("valid hindu marriage", "Hindu_Marriage", "5"),
     ("restitution of conjugal rights", "Hindu_Marriage", "9"),
@@ -239,38 +336,34 @@ SECTION_HINTS = [
     ("custody of children", "Hindu_Marriage", "26"),
     ("maintenance provision", "Hindu_Marriage", "24"),
     ("maintenance under hindu", "Hindu_Marriage", "24"),
+    ("hindu marriage maintenance", "Hindu_Marriage", "24"),
     ("maintenance after divorce", "Hindu_Marriage", "25"),
     ("alimony", "Hindu_Marriage", "25"),
-
-
-    # =================== Special Marriage Act ===================
+    # Special Marriage Act
     ("conditions for special marriage", "Special_Marriage", "4"),
     ("special marriage registration", "Special_Marriage", "4"),
-
-    # =================== Dowry Prohibition Act ===================
+    # Dowry Prohibition Act
     ("penalty for giving dowry", "Dowry_Prohibition", "3"),
     ("penalty for demanding dowry", "Dowry_Prohibition", "4"),
     ("dowry prohibition punishment", "Dowry_Prohibition", "3"),
-
-    # =================== Domestic Violence Act ===================
+    ("punishment for demanding dowry", "Dowry_Prohibition", "4"),
+    ("punishment for giving dowry", "Dowry_Prohibition", "3"),
+    # Domestic Violence Act
     ("application to magistrate", "Domestic_Violence", "12"),
     ("protection order", "Domestic_Violence", "18"),
     ("residence order", "Domestic_Violence", "19"),
     ("monetary relief", "Domestic_Violence", "20"),
     ("custody order", "Domestic_Violence", "21"),
-
-    # =================== Child Marriage Act ===================
+    # Child Marriage Act
     ("punishment for child marriage", "Child_Marriage", "9"),
     ("child marriage punishment", "Child_Marriage", "9"),
-
-    # =================== Negotiable Instruments Act ===================
+    # NI Act
     ("cheque bounce", "Negotiable", "138"),
     ("dishonour of cheque", "Negotiable", "138"),
     ("section 138 ni act", "Negotiable", "138"),
     ("cheque dishonour punishment", "Negotiable", "138"),
     ("notice for cheque bounce", "Negotiable", "138"),
-
-    # =================== Motor Vehicles Act ===================
+    # Motor Vehicles Act
     ("motor accident compensation", "Motor", "166"),
     ("accident claim", "Motor", "166"),
     ("claim petition motor", "Motor", "166"),
@@ -279,8 +372,9 @@ SECTION_HINTS = [
     ("motor vehicle accident", "Motor", "166"),
     ("compensation for accident", "Motor", "166"),
     ("accident compensation", "Motor", "166"),
-    
-    # =================== NDPS Act ===================
+    ("compensation for motor accident", "Motor", "166"),
+    ("motor accident claim", "Motor", "166"),
+    # NDPS Act
     ("ndps offence", "Narcotic", "8"),
     ("punishment for cannabis", "Narcotic", "20"),
     ("punishment for heroin", "Narcotic", "21"),
@@ -291,84 +385,48 @@ SECTION_HINTS = [
     ("ganja", "Narcotic", "20"),
     ("heroin", "Narcotic", "21"),
     ("possession of drugs", "Narcotic", "20"),
-
-    # =================== POCSO Act ===================
+    ("cannabis possession", "Narcotic", "20"),
+    ("ndps cannabis", "Narcotic", "20"),
+    # POCSO Act
     ("penetrative sexual assault", "pocso", "3"),
     ("pocso punishment", "pocso", "4"),
     ("aggravated penetrative", "pocso", "5"),
     ("sexual assault on child", "pocso", "7"),
     ("sexual harassment child", "pocso", "11"),
-
-    # =================== Arms Act ===================
+    # Arms Act
     ("illegal arms", "ArmsAct", "25"),
     ("arms act punishment", "ArmsAct", "25"),
     ("using arms", "ArmsAct", "27"),
-
-    # =================== Prevention of Corruption Act ===================
+    # PC Act
     ("bribery public servant", "Corruption", "7"),
     ("criminal misconduct", "Corruption", "13"),
     ("corruption punishment", "Corruption", "7"),
-
-    # =================== SC/ST Act ===================
+    # SC/ST Act
     ("atrocities on sc st", "Scheduled", "3"),
     ("sc st atrocities", "Scheduled", "3"),
-
-    # =================== Juvenile Justice Act ===================
+    # Juvenile
     ("heinous offence juvenile", "Juvenile", "74"),
     ("juvenile punishment", "Juvenile", "75"),
-
-    # =================== Maintenance of Parents Act ===================
+    # Parents Act
     ("maintenance of parents", "Maintenance_and_Welfare", "4"),
     ("neglect of parents", "Maintenance_and_Welfare", "5"),
-
-    # =================== PESA ===================
+    # PESA
     ("where does pesa apply", "pesa", "3"),
     ("pesa applicability", "pesa", "3"),
-
-    # =================== CG Rent Control ===================
+    # Rent Control
     ("grounds for eviction", "Rent_Control", "11"),
     ("eviction grounds", "Rent_Control", "11"),
     ("evict tenant", "Rent_Control", "11"),
     ("habitual defaulter", "Rent_Control", "11"),
     ("eviction", "Rent_Control", "11"),
-
-    # =================== CG Land Revenue ===================
+    # CG Land Revenue
     ("mutation", "Land_Revenue", "109"),
     ("partition", "Land_Revenue", "178"),
-
-    # NDPS alternatives
-    ("cannabis possession", "Narcotic", "20"),
-    ("punishment for cannabis", "Narcotic", "20"),
-    ("ndps cannabis", "Narcotic", "20"),
-    ("ganja", "Narcotic", "20"),
-
-    # Hindu Marriage maintenance
-    ("maintenance under hindu", "Hindu_Marriage", "24"),
-    ("hindu marriage maintenance", "Hindu_Marriage", "24"),
-    ("alimony", "Hindu_Marriage", "25"),
-
-    # Dowry synonyms
-    ("punishment for demanding dowry", "Dowry_Prohibition", "4"),
-    ("punishment for giving dowry", "Dowry_Prohibition", "3"),
-
-    # Motor accident
-    ("motor accident compensation", "Motor", "166"),
-    ("compensation for motor accident", "Motor", "166"),
-    ("motor accident claim", "Motor", "166"),
 ]
 
-
 def detect_section_hint(query, source_filter):
-    """
-    Returns (section, source_hint) if a hint matches, else (None, None).
-
-    Behaviour:
-      - If source_filter is provided, only hints matching that source fire.
-      - If source_filter is None, any hint can fire, and the hint's own
-        source fragment is returned so the caller can adopt it.
-    """
     q = query.lower()
-    sf = source_filter.lower() if source_filter else ""
+    sf = source_filter.lower() if isinstance(source_filter, str) else ""
     for phrase, src_hint, section in SECTION_HINTS:
         if phrase in q:
             if sf and src_hint.lower() not in sf:
@@ -386,18 +444,22 @@ bm25 = BM25Okapi(tokenized_corpus)
 
 _bm25_cache = {}
 
-def _bm25_key(source_fragment, doc_type_filter):
-    return (source_fragment or "", doc_type_filter or "")
+def _bm25_key(source_filter, doc_type_filter):
+    if isinstance(source_filter, (list, tuple, set)):
+        sf_key = tuple(sorted(str(x) for x in source_filter))
+    else:
+        sf_key = str(source_filter) if source_filter else ""
+    return (sf_key, doc_type_filter or "")
 
-def get_filtered_bm25(source_fragment, doc_type_filter=None):
-    key = _bm25_key(source_fragment, doc_type_filter)
+def get_filtered_bm25(source_filter, doc_type_filter=None):
+    key = _bm25_key(source_filter, doc_type_filter)
     if key in _bm25_cache:
         return _bm25_cache[key]
 
     indices = []
     for i, c in enumerate(chunks):
         meta = c["metadata"]
-        if source_fragment and not matches_source(meta, source_fragment):
+        if source_filter and not matches_source(meta, source_filter):
             continue
         if doc_type_filter and meta.get("doc_type") != doc_type_filter:
             continue
@@ -412,7 +474,6 @@ def get_filtered_bm25(source_fragment, doc_type_filter=None):
     result = (filtered_bm25, [chunks[i] for i in indices], indices)
     _bm25_cache[key] = result
     return result
-
 
 # ----------------------------
 # Chroma + models
@@ -461,7 +522,7 @@ def find_chunks_by_section(source_filter, target_section, doc_type_filter=None):
     for (src, sec), ids in SECTION_MAP.items():
         if sec != target:
             continue
-        if source_filter and source_filter.lower() not in src:
+        if source_filter and not matches_source({"source": src}, source_filter):
             continue
         for cid in ids:
             if doc_type_filter:
@@ -474,6 +535,17 @@ def find_chunks_by_section(source_filter, target_section, doc_type_filter=None):
             matching_ids.append(cid)
     return matching_ids
 
+def _matching_sources_for(source_filter):
+    """Return list of ALL_SOURCES strings matching source_filter (string or list)."""
+    if isinstance(source_filter, (list, tuple, set)):
+        out = set()
+        for fragment in source_filter:
+            for s in ALL_SOURCES:
+                if str(fragment).lower() in s.lower():
+                    out.add(s)
+        return sorted(out)
+    return [s for s in ALL_SOURCES if str(source_filter).lower() in s.lower()]
+
 def dense_search(query, top_k=20, source_filter=None, doc_type_filter=None):
     query_embedding = model.encode([query])[0]
     kwargs = {
@@ -484,7 +556,7 @@ def dense_search(query, top_k=20, source_filter=None, doc_type_filter=None):
 
     where_conditions = []
     if source_filter:
-        matching_sources = [s for s in ALL_SOURCES if source_filter.lower() in s.lower()]
+        matching_sources = _matching_sources_for(source_filter)
         if not matching_sources:
             return []
         if len(matching_sources) == 1:
@@ -549,9 +621,11 @@ def reciprocal_rank_fusion(dense_results, sparse_results, k=60):
 # Hybrid search
 # ----------------------------
 def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rerank=True):
+    # TIER 1: hints (explicit match in query)
     if source_filter is None:
         source_filter = detect_source_filter(query)
 
+    # Judgment-mode override
     if doc_type_filter is None and query_wants_judgments(query):
         doc_type_filter = "judgment"
         source_filter = None
@@ -562,6 +636,12 @@ def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rera
         target_section, hint_source = detect_section_hint(query, source_filter)
         if target_section and hint_source and not source_filter:
             source_filter = hint_source
+
+    # TIER 2: classifier fallback (only if no hints fired and not judgment mode)
+    if not source_filter and not target_section and doc_type_filter != "judgment":
+        classifier_fragments = classifier_route(query)
+        if classifier_fragments:
+            source_filter = classifier_fragments  # list of fragments
 
     final_results = []
     seen_ids = set()
@@ -639,26 +719,26 @@ def hybrid_search(query, top_k=5, source_filter=None, doc_type_filter=None, rera
 # ----------------------------
 if __name__ == "__main__":
     test_queries = [
-        # Existing
+        # Hint tier
         "What is the punishment for murder under BNS?",
-        "What is the grounds for eviction under the Chhattisgarh Rent Control Act?",
-        # New acts
+        "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
         "What is the punishment for cheque bounce under Section 138 NI Act?",
         "What is the grounds for divorce under Hindu Marriage Act?",
-        "What is the punishment under NDPS Act for possession of cannabis?",
-        "What is the punishment for illegal arms under Arms Act?",
-        "What is the punishment under POCSO for aggravated penetrative sexual assault?",
-        "What is the procedure for protection order under Domestic Violence Act?",
-        "What is the maintenance provision under Hindu Marriage Act?",
-        "What is the punishment for demanding dowry?",
-        "What is the compensation provision for motor accident?",
-        "What is the SC ST atrocities punishment?",
+        # Classifier tier (no act name in query)
+        "How do I get a protection order against my abusive husband?",
+        "What happens if a cheque I gave gets dishonoured?",
+        "My landlord is threatening to throw me out without going to court.",
+        "Can I file for divorce because my spouse is cruel?",
+        "What are the penalties for carrying an unlicensed gun?",
+        # Semantic only (no hint, no confident classifier)
+        "What is the punishment for jaywalking in Chhattisgarh?",
     ]
     for q in test_queries:
-        sf = detect_source_filter(q)
-        wants_j = query_wants_judgments(q)
         print(f"\n=== {q} ===")
-        print(f"  source_filter={sf}  judgment_query={wants_j}")
+        sf_hint = detect_source_filter(q)
+        wants_j = query_wants_judgments(q)
+        cls_frags = None if sf_hint else classifier_route(q)
+        print(f"  hint_filter={sf_hint}  judgment_query={wants_j}  classifier={cls_frags}")
         results = hybrid_search(q, top_k=3)
         if not results:
             print("  [NO RESULTS]")
