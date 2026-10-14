@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    image: cg-legal-rag:v1
+    container_name: cg-legal-rag
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    environment:
+      # Belt-and-suspenders: forces chroma path to /app/data/vector_db, never /tmp
+      SPACE_ID: ""
+    volumes:
+      # Host's pre-built vector_db + chunks + classifier are used directly.
+      # Container sees /app/data = host's ./data
+      - ./data:/app/data
+    restart: unless-stopped

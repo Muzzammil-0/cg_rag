@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Git (mount will supply nothing from here)
+.git/
+.gitattributes
+
+# Large data — bind-mounted from host at runtime, never baked
+data/vector_db/
+data/raw/
+data/evaluation/results.json
+data/evaluation/case_law_results.json
+data/evaluation/generation_results.json
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+dist/
+build/
