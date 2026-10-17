@@ -10,6 +10,7 @@ data/vector_db/
 data/rag.db*
 data/evaluation/results.json
 data/evaluation/case_law_results.json
+data/evaluation/generation_results.json
 
 data/classifier/model/checkpoints/
 
@@ -22,3 +23,5 @@ data/classifier/progress.json
 data/classifier/training_data_original.jsonl
 
 data/processed/chunks.jsonl
+.env.*
+!.env.example
