@@ -4,16 +4,24 @@ from pathlib import Path
 import chromadb
 from sentence_transformers import SentenceTransformer
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def get_chroma_path():
     if os.getenv("SPACE_ID"):
         return Path("/tmp/vector_db")
-    return Path("data/vector_db")
+    return PROJECT_ROOT / "data" / "vector_db"
 
+def get_contextual_text(chunk):
+    meta = chunk["metadata"]
+    source = meta.get("source", "").replace(".pdf", "").replace(".PDF", "").replace("_", " ")
+    sec = meta.get("section", meta.get("article", meta.get("para", "")))
+    if sec:
+        return f"[{source}] [Section {sec}] {chunk['text']}"
+    return f"[{source}] {chunk['text']}"
 
 def build_if_needed():
     db_path = get_chroma_path()
-    chunks_file = Path("data/processed/chunks_v2.jsonl")
+    chunks_file = PROJECT_ROOT / "data" / "processed" / "chunks_v2.jsonl"
 
     client = chromadb.PersistentClient(path=str(db_path))
 
@@ -31,9 +39,8 @@ def build_if_needed():
         for line in f:
             chunks.append(json.loads(line))
 
-    print(f"Loaded {len(chunks)} chunks. Generating embeddings...")
     model = SentenceTransformer("all-MiniLM-L6-v2")
-    texts = [c["text"] for c in chunks]
+    texts = [get_contextual_text(c) for c in chunks]
     ids = [f"chunk_{i}" for i in range(len(chunks))]
     metadatas = [c["metadata"] for c in chunks]
 
@@ -55,7 +62,6 @@ def build_if_needed():
             metadatas=metadatas[start:end],
         )
     print(f"ChromaDB built: {len(chunks)} chunks at {db_path}")
-
 
 if __name__ == "__main__":
     build_if_needed()

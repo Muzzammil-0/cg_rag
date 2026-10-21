@@ -2,6 +2,9 @@ import json
 import re
 from pathlib import Path
 
+# --- DOCKER PATH FIX ---
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 def clean_text(text):
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'Contents\s*\n\s*ARTICLES\s*\([ivx]+\)', '', text)
@@ -119,14 +122,7 @@ def split_constitution_subsections(chunks):
 
     return result
 
-
-# ------------------------------------------------------------
-# UPDATED: handles "2[304B." amendment-insertion markers
-# ------------------------------------------------------------
 def chunk_generic_act(text, source):
-    # Allow an optional footnote marker like "1[" or "2[" or "12[" before the
-    # section number. This is how Indian PDFs mark sections inserted by
-    # subsequent amendments (e.g. IPC 304B, IPC 498A, IPC 376A-D).
     pattern = re.compile(
         r'^\s*(?:\d{1,3}\[)?(?:(?:Section|Rule)\s+)?(\d+[A-Z]*)\.\s+',
         re.MULTILINE
@@ -142,8 +138,6 @@ def chunk_generic_act(text, source):
         start = match.start()
         end = matches[i+1].start() if i+1 < len(matches) else len(text)
         chunk_text = text[start:end].strip()
-        # Strip a leading footnote marker from the chunk text so the
-        # citation reads cleanly as "304B. Dowry death.—..." not "2[304B..."
         chunk_text = re.sub(r'^\d{1,3}\[\s*', '', chunk_text)
         chunks.append({
             "text": chunk_text,
@@ -155,14 +149,7 @@ def chunk_generic_act(text, source):
         })
     return chunks
 
-
-# ------------------------------
-# NEW: judgment chunker
-# ------------------------------
 def chunk_judgment(text, source):
-    """
-    Split a judgment by numbered paragraphs.
-    """
     patterns = [
         re.compile(r'^\s*(\d+)\.\s+(?=[A-Z(])', re.MULTILINE),
         re.compile(r'^\s*Para\s+(\d+)\.\s+', re.MULTILINE | re.IGNORECASE),
@@ -206,21 +193,18 @@ def chunk_judgment(text, source):
         })
     return chunks
 
-
 def main():
-    input_file = Path("data/processed/extracted_text.json")
-    output_file = Path("data/processed/chunks_v2.jsonl")
+    # UPDATE PATHS
+    input_file = PROJECT_ROOT / "data/processed/extracted_text.json"
+    output_file = PROJECT_ROOT / "data/processed/chunks_v2.jsonl"
 
     with open(input_file, "r", encoding="utf-8") as f:
         extracted = json.load(f)
 
     all_chunks = []
     stats = {
-        "total": 0,
-        "toc_filtered": 0,
-        "noise_filtered": 0,
-        "acts_processed": 0,
-        "judgments_processed": 0,
+        "total": 0, "toc_filtered": 0, "noise_filtered": 0, 
+        "acts_processed": 0, "judgments_processed": 0,
     }
 
     for filename, entry in extracted.items():
@@ -270,7 +254,6 @@ def main():
     print(f"Filtered noise: {stats['noise_filtered']}")
     print(f"Sub-articles split out: {split_extra}")
     print(f"Kept chunks: {len(all_chunks)} -> {output_file}")
-
 
 if __name__ == "__main__":
     main()
