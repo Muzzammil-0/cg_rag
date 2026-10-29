@@ -1,22 +1,22 @@
 {
   "val": {
-    "eval_loss": 1.3822686672210693,
-    "eval_accuracy": 0.7098445595854922,
-    "eval_f1_macro": 0.6297287919482192,
-    "eval_f1_weighted": 0.6892759640942961,
-    "eval_runtime": 9.1656,
-    "eval_samples_per_second": 21.057,
-    "eval_steps_per_second": 0.764,
+    "eval_loss": 1.276533603668213,
+    "eval_accuracy": 0.7208121827411168,
+    "eval_f1_macro": 0.6513873763660915,
+    "eval_f1_weighted": 0.7042348578177027,
+    "eval_runtime": 11.7059,
+    "eval_samples_per_second": 16.829,
+    "eval_steps_per_second": 0.598,
     "epoch": 10.0
   },
   "test": {
-    "accuracy": 0.6994818652849741,
-    "f1_macro": 0.6126762035479141
+    "accuracy": 0.6598984771573604,
+    "f1_macro": 0.5708901188680601
   },
   "num_classes": 26,
-  "num_train": 1651,
-  "num_val": 193,
-  "num_test": 193,
+  "num_train": 1679,
+  "num_val": 197,
+  "num_test": 197,
   "small_classes": [
     [
       "CG Tendu Patta Act",
