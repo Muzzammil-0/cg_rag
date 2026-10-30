@@ -1,23 +1,20 @@
 """
 LLM-based act and section extraction from a user query.
-
 Used as a fallback tier in retriever.py when the act classifier
 is not confident enough to route.
-
-Example:
-    extract_act_section("What are the penalties for carrying an unlicensed gun?")
-    -> ("Arms Act", "25")
 """
 
 import os
 import re
 import json
-import time
+import logging
 from functools import lru_cache
-from pathlib import Path
 
 from dotenv import load_dotenv
 from groq import Groq
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -95,10 +92,6 @@ ACT_NAME_TO_FRAGMENTS = {
 
 VALID_ACT_NAMES = sorted(ACT_NAME_TO_FRAGMENTS.keys())
 
-
-# ------------------------------------------------------------------
-# Prompt
-# ------------------------------------------------------------------
 SYSTEM_PROMPT = """You are a legal query analyzer for Indian and Chhattisgarh law.
 
 Given a user query, identify:
@@ -128,10 +121,6 @@ Query: "What is the tax rate on cryptocurrency?"
 {"act": null, "section": null}
 """
 
-
-# ------------------------------------------------------------------
-# JSON extraction
-# ------------------------------------------------------------------
 def _extract_json(text):
     text = re.sub(r'<think>.*?(?:</think>|$)', '', text, flags=re.DOTALL)
     text = re.sub(r'```(?:json)?\s*', '', text)
@@ -158,16 +147,10 @@ def _extract_json(text):
                     return None
     return None
 
-
-# ------------------------------------------------------------------
-# Public: extract act + section from query
-# ------------------------------------------------------------------
 @lru_cache(maxsize=512)
 def extract_act_section(query, model="openai/gpt-oss-20b", timeout=10):
     """
     Returns (act_name, section) where either may be None.
-
-    Cached per (query, model) so repeated queries skip the LLM.
     """
     if not query or len(query.strip()) < 5:
         return (None, None)
@@ -192,13 +175,11 @@ def extract_act_section(query, model="openai/gpt-oss-20b", timeout=10):
         act = parsed.get("act")
         section = parsed.get("section")
 
-        # Validate act against known names (case-insensitive match)
         if act:
             if act not in ACT_NAME_TO_FRAGMENTS:
                 lower = {k.lower(): k for k in ACT_NAME_TO_FRAGMENTS}
                 act = lower.get(str(act).lower())
 
-        # Validate section is a short identifier
         if section is not None:
             section = str(section).strip()
             if not re.match(r'^[0-9]+[A-Za-z]?(\([0-9]+\))?$', section):
@@ -207,9 +188,8 @@ def extract_act_section(query, model="openai/gpt-oss-20b", timeout=10):
         return (act, section)
 
     except Exception as e:
-        print(f"[query_analyzer] {type(e).__name__}: {str(e)[:120]}")
+        logger.error(f"Error during act/section extraction: {type(e).__name__}: {str(e)[:120]}")
         return (None, None)
-
 
 def get_fragments_for_act(act_name):
     """Return source fragments for an act name, or None."""
@@ -217,14 +197,10 @@ def get_fragments_for_act(act_name):
         return None
     return ACT_NAME_TO_FRAGMENTS.get(act_name)
 
-# ------------------------------------------------------------------
-# Reverse map: source fragment → act name(s)
-# ------------------------------------------------------------------
 FRAGMENT_TO_ACT_NAMES = {}
 for _act, _frags in ACT_NAME_TO_FRAGMENTS.items():
     for _f in _frags:
         FRAGMENT_TO_ACT_NAMES.setdefault(_f, []).append(_act)
-
 
 SECTION_REFINE_PROMPT = """You are a legal section identifier for Indian and Chhattisgarh law.
 
@@ -253,7 +229,6 @@ Query: "What is the process for something I don't know about?"
 Act: Motor Vehicles Act
 {"section": null}
 """
-
 
 @lru_cache(maxsize=512)
 def refine_section_with_llm(query, act_name, model="openai/gpt-oss-20b"):
@@ -293,9 +268,8 @@ def refine_section_with_llm(query, act_name, model="openai/gpt-oss-20b"):
         return section
 
     except Exception as e:
-        print(f"[query_analyzer.refine] {type(e).__name__}: {str(e)[:120]}")
+        logger.error(f"Error during section refinement: {type(e).__name__}: {str(e)[:120]}")
         return None
-
 
 def act_name_for_fragment(fragment):
     """Return the primary act name for a source fragment, or None."""
