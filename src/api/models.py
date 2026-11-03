@@ -16,7 +16,7 @@ class RetrievedChunk(BaseModel):
 class QueryResponse(BaseModel):
     question: str
     answer: str
-    citations: list
+    citations: list[int]
     confidence: float
     latency_ms: int
     retrieved: list[RetrievedChunk]

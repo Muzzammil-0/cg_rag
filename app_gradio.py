@@ -4,13 +4,10 @@ try:
 except ImportError:
     _SPACES_AVAILABLE = False
 
-
-# Register a dummy GPU function to satisfy ZeroGPU startup scan
 if _SPACES_AVAILABLE:
     @spaces.GPU
     def _dummy_gpu_marker():
         return "ok"
-
 
 import sys
 import os
@@ -22,14 +19,14 @@ import gradio as gr
 from src.generation.generator import generate_answer, generate_reasoning
 from src.embeddings.startup_embed import build_if_needed
 
+# --- Configuration ---
+DEFAULT_TOP_K_CHAT = 20
+DEFAULT_TOP_K_REASONING = 15
 
-# --- Build ChromaDB before the server starts ---
 print("Pre-startup: building ChromaDB...")
 build_if_needed()
 print("Pre-startup: complete.")
-
 print("GROQ_API_KEY set:", bool(os.getenv("GROQ_API_KEY")))
-
 
 # ------------------------------------------------------------
 # Tab 1: Ask a legal question
@@ -39,7 +36,7 @@ def chat_fn(message, history):
         return "Please enter a legal question."
 
     try:
-        answer_data, results = generate_answer(message, top_k=5, verbose=False)
+        answer_data, results = generate_answer(message, top_k=DEFAULT_TOP_K_CHAT, verbose=False)
     except Exception as e:
         return f"Error: {e}"
 
@@ -53,10 +50,10 @@ def chat_fn(message, history):
             m = results[idx]["metadata"]
             src = m.get("source", "")
             sec = m.get("section", m.get("article", m.get("para", "")))
-            citation_lines.append(f"[{c}] {src} — {sec}")
+            citation_lines.append(f"- **[Citation {c}]** {src} — Section {sec}")
 
     if citation_lines:
-        answer += "\n\n**Sources:**\n" + "\n".join(citation_lines)
+        answer += "\n\n### Sources\n" + "\n".join(citation_lines)
 
     return answer
 
@@ -66,54 +63,71 @@ def chat_fn(message, history):
 # ------------------------------------------------------------
 def reasoning_fn(fact_pattern):
     if not fact_pattern or len(fact_pattern.strip()) < 20:
-        return (
-            "Please enter a fact pattern (at least 20 characters).",
-            "", "", "", "", "", "",
-        )
+        yield ("Please enter a fact pattern (at least 20 characters).", "", "", "", "", "", "")
+        return
 
-    # Reject question-style input — this tab expects a scenario, not a question
     text = fact_pattern.strip().lower()
-    question_starters = (
-        "what ", "how ", "when ", "why ", "who ", "is ", "are ",
-        "can ", "does ", "should ", "which ", "where ",
-    )
+    question_starters = ("what ", "how ", "when ", "why ", "who ", "is ", "are ", "can ", "does ", "should ", "which ", "where ")
     if text.startswith(question_starters):
-        msg = (
-            "**This tab expects a fact pattern, not a question.**\n\n"
-            "**Wrong:** *What are the conditions for rape?*\n\n"
-            "**Right:** *A 25-year-old man forced himself on a 20-year-old woman at a party. "
-            "She reported the next day. The defence claims the act was consensual.*\n\n"
-            "If you want to ask a question, use the **Ask a legal question** tab."
-        )
-        return (msg, "", "", "", "", "", "")
+        msg = ("**This tab expects a fact pattern, not a question.**\n\n"
+               "**Wrong:** *What are the conditions for rape?*\n\n"
+               "**Right:** *A 25-year-old man forced himself on a 20-year-old woman at a party. She reported the next day.*")
+        yield (msg, "", "", "", "", "", "")
+        return
+
+    # --- YIELD 1: IMMEDIATE FEEDBACK ---
+    # This fires the exact millisecond the button is clicked
+    yield (
+        "*Analyzing fact pattern...*", 
+        "*Extracting legal issues and running multi-query retrieval...*", 
+        "*Waiting for LLM...*", 
+        "", "", "", ""
+    )
+
     try:
-        result, results = generate_reasoning(fact_pattern, top_k=10, verbose=False)
+        result, results = generate_reasoning(fact_pattern, top_k=DEFAULT_TOP_K_REASONING, verbose=False)
     except Exception as e:
-        return (f"Error: {e}", "", "", "", "", "", "")
+        yield (f"Error: {e}", "", "", "", "", "", "")
+        return
 
-    if result.get("error"):
-        return (
-            f"Failed to parse model output. Try again.\n\nRaw: {result.get('raw', '')[:500]}",
-            "", "", "", "", "", "",
-        )
+    if not result or result.get("error"):
+        yield (f"Failed to parse model output. Try again.\n\nRaw: {result.get('raw', '')[:500]}", "", "", "", "", "", "")
+        return
 
-    # Format each field as markdown
+    # 1. Issues
     issues = "\n".join(f"- {x}" for x in result.get("issues", [])) or "—"
 
+    # 2. Provisions
     provisions_lines = []
     for p in result.get("provisions", []):
+        quote = p.get('quote', '')
+        quote_str = f"\n  > *\"{quote}\"*" if quote else ""
         provisions_lines.append(
-            f"- **{p.get('source', '')} {p.get('section', '')}** — {p.get('relevance', '')}"
+            f"- **{p.get('source', '')} {p.get('section', '')}**\n  **Relevance:** {p.get('relevance', '')}{quote_str}"
         )
-    provisions = "\n".join(provisions_lines) or "—"
+    provisions = "\n\n".join(provisions_lines) or "—"
 
+    # 3. Arguments
     pet = "\n".join(f"- {x}" for x in result.get("petitioner_arguments", [])) or "—"
     resp = "\n".join(f"- {x}" for x in result.get("respondent_arguments", [])) or "—"
 
+    # 4. Reasoning
     reasoning = result.get("likely_reasoning", "") or "—"
-    outcome = result.get("possible_outcome", "") or "—"
 
-    # Citations + sources
+    # 5. Multi-Outcome
+    outcomes_list = result.get("possible_outcomes", [])
+    if outcomes_list:
+        outcome_parts = []
+        for o in outcomes_list:
+            likelihood = o.get('likelihood', 'Outcome')
+            scenario = o.get('scenario', '')
+            rationale = o.get('rationale', '')
+            outcome_parts.append(f"### {likelihood}\n**Scenario:** {scenario}\n\n*Rationale:* {rationale}")
+        outcome = "\n\n---\n\n".join(outcome_parts)
+    else:
+        outcome = "—"
+
+    # 6. Sources
     citations = result.get("citations", [])
     source_lines = []
     for c in citations:
@@ -122,49 +136,38 @@ def reasoning_fn(fact_pattern):
             m = results[idx]["metadata"]
             src = m.get("source", "")
             sec = m.get("section", m.get("article", m.get("para", "")))
-            source_lines.append(f"[{c}] {src} — {sec}")
+            source_lines.append(f"- **[Citation {c}]** {src} — Section {sec}")
 
     confidence = result.get("confidence", 0.0)
     sources_md = ""
     if source_lines:
-        sources_md = "\n\n**Sources:**\n" + "\n".join(source_lines)
-    sources_md += f"\n\n**Confidence:** {confidence}"
+        sources_md = "\n".join(source_lines)
+    sources_md += f"\n\n**Model Confidence:** {confidence}"
 
-    return (
-        issues,
-        provisions,
-        pet,
-        resp,
-        reasoning,
-        outcome,
-        sources_md,
-    )
+    # --- YIELD 2: FINAL OUTPUT ---
+    yield (issues, provisions, pet, resp, reasoning, outcome, sources_md)
 
 
 # ------------------------------------------------------------
-# UI
+# UI Layout
 # ------------------------------------------------------------
 with gr.Blocks(title="CG Legal RAG") as demo:
-    gr.Markdown("# ⚖️ CG Legal RAG")
-    gr.Markdown(
-        "Legal research assistant for Indian and Chhattisgarh law. "
-        "Two modes: **Ask** (quick cited answers) and **Reason** (simulate judicial reasoning on a fact pattern)."
-    )
-
-    with gr.Tab("💬 Ask a legal question"):
+    gr.Markdown("# CG Legal RAG")
+    gr.Markdown("Legal research assistant for Indian and Chhattisgarh law.")
+    
+    with gr.Tab("Ask a legal question"):
         gr.ChatInterface(
-            fn=chat_fn,
-            title="",
+            fn=chat_fn, 
+            title="", 
             description="Ask a legal question in plain English. Answers are cited from statutes and judgments.",
             examples=[
                 "What is the punishment for murder under BNS?",
-                "What is the procedure for registering an FIR under CrPC?",
-                "What are the grounds for eviction under the Chhattisgarh Rent Control Act?",
-                "Show me case law on electricity theft in Chhattisgarh.",
-            ],
+                "What is the penalty for a data fiduciary failing to prevent a data breach under the DPDP Act?",
+                "What are the grounds for eviction under the Chhattisgarh Rent Control Act?"
+            ]
         )
 
-    with gr.Tab("⚖️ Simulate case reasoning"):
+    with gr.Tab("Simulate case reasoning"):
         gr.Markdown(
             "Enter a fact pattern. The system retrieves relevant provisions and judgments, "
             "then simulates how a Chhattisgarh court might reason through it.\n\n"
@@ -174,54 +177,45 @@ with gr.Blocks(title="CG Legal RAG") as demo:
         fact_input = gr.Textbox(
             label="Fact pattern",
             placeholder=(
-                "Example: A tenant has not paid rent for 8 months. The landlord issued "
-                "a notice under Section 12 of the CG Rent Control Act demanding payment "
-                "and threatening eviction. The tenant claims financial hardship."
+                "Example: Anjali discovers her company is secretly harvesting user data in violation of the DPDP Act. "
+                "She reports it, and the CEO fires her without notice, refuses to pay her pending salary, and threatens to arrest her for defamation."
             ),
             lines=6,
         )
         reason_btn = gr.Button("Simulate reasoning", variant="primary")
 
-        gr.Markdown("### Issues identified")
+        gr.Markdown("### Issues Identified")
         issues_out = gr.Markdown()
 
-        gr.Markdown("### Applicable provisions")
+        gr.Markdown("### Applicable Provisions & Verified Quotes")
         provisions_out = gr.Markdown()
 
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### Petitioner arguments")
+                gr.Markdown("### Petitioner Arguments")
                 pet_out = gr.Markdown()
             with gr.Column():
-                gr.Markdown("### Respondent arguments")
+                gr.Markdown("### Respondent Arguments")
                 resp_out = gr.Markdown()
 
-        gr.Markdown("### Likely reasoning")
+        gr.Markdown("### Likely Reasoning")
         reasoning_out = gr.Markdown()
 
-        gr.Markdown("### Possible outcome (with caveats)")
+        gr.Markdown("### Possible Outcomes (Ranked)")
         outcome_out = gr.Markdown()
 
-        gr.Markdown("### Sources & confidence")
+        gr.Markdown("### Sources & Confidence")
         sources_out = gr.Markdown()
 
         reason_btn.click(
-            fn=reasoning_fn,
-            inputs=[fact_input],
+            fn=reasoning_fn, 
+            inputs=[fact_input], 
             outputs=[
-                issues_out,
-                provisions_out,
-                pet_out,
-                resp_out,
-                reasoning_out,
-                outcome_out,
-                sources_out,
+                issues_out, provisions_out, pet_out, resp_out, 
+                reasoning_out, outcome_out, sources_out
             ],
+            show_progress="full"
         )
 
 
-demo.launch(
-    server_name="0.0.0.0",
-    server_port=7860,
-    ssr_mode=False,
-)
+demo.launch(server_name="0.0.0.0", server_port=7860, ssr_mode=False)
