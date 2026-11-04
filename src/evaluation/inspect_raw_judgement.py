@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
-with open("data/processed/extracted_text.json", "r", encoding="utf-8") as f:
+# --- DOCKER PATH FIX ---
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+with open(PROJECT_ROOT / "data/processed/extracted_text.json", "r", encoding="utf-8") as f:
     d = json.load(f)
 
 judgments = [(k, v["text"]) for k, v in d.items() if v.get("doc_type") == "judgment"]

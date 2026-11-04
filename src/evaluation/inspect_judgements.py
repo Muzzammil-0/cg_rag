@@ -2,7 +2,9 @@ import json
 from collections import Counter
 from pathlib import Path
 
-CHUNKS_PATH = Path("data/processed/chunks_v2.jsonl")
+# --- DOCKER PATH FIX ---
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CHUNKS_PATH = PROJECT_ROOT / "data/processed/chunks_v2.jsonl"
 
 chunks = []
 with open(CHUNKS_PATH, "r", encoding="utf-8") as f:

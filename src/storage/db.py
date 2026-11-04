@@ -1,8 +1,15 @@
 import sqlite3
+import os
 from pathlib import Path
 
-import os
-DB_PATH = Path("/tmp/rag.db") if os.getenv("SPACE_ID") else Path("data/rag.db")
+# --- DOCKER PATH FIX ---
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# UPDATE PATH
+if os.getenv("SPACE_ID"):
+    DB_PATH = Path("/tmp/rag.db")
+else:
+    DB_PATH = PROJECT_ROOT / "data" / "rag.db"
 
 def get_connection():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
