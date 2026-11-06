@@ -1,0 +1,14 @@
+# Optional dependencies for data-pipeline / training scripts (not needed to run the app).
+# Install with:  pip install -r requirements-dev.txt
+
+# Used by src/classifier/train_classifier.py
+scikit-learn
+
+# Test runner (used by the tests/ suite)
+pytest
+
+# Used by src/ingestion/fetch_judgments.py to download Chhattisgarh HC judgments.
+# This is a specialized library; install it manually if you need to re-fetch the
+# judgment corpus (it is intentionally NOT in requirements.txt so the core app
+# install never depends on it):
+#   pip install bharat_courts
