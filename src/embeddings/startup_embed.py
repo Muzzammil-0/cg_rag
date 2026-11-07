@@ -39,7 +39,7 @@ def build_if_needed():
         for line in f:
             chunks.append(json.loads(line))
 
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")  # or "cuda" if available
     texts = [get_contextual_text(c) for c in chunks]
     ids = [f"chunk_{i}" for i in range(len(chunks))]
     metadatas = [c["metadata"] for c in chunks]

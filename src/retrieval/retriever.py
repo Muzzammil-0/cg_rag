@@ -224,8 +224,8 @@ class LegalRetriever:
         self._bm25_cache: Dict[Tuple[Any, str], Tuple[Optional[BM25Okapi], List, List[int]]] = {}
         self.client = chromadb.PersistentClient(path=self._chroma_path())
         self._collection = None
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+        self.model = SentenceTransformer('all-MiniLM-L6-v2', deviece='cpu')  # or "cuda" if available
+        self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cpu')  # or "cuda" if available
         self.classifier = ActClassifier()
         self.ALL_SOURCES: List[str] = []
         self.SECTION_MAP: Dict[Tuple[str, str], List[str]] = {}
