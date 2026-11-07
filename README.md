@@ -1,4 +1,3 @@
-```markdown
 ---
 title: CG Legal RAG
 emoji: ⚖️
@@ -10,241 +9,181 @@ app_file: app_gradio.py
 pinned: false
 ---
 
-# ⚖️ CG Legal RAG
+# ⚖️ CG Legal RAG (V2)
 
 **Live demo:** [huggingface.co/spaces/Muzzammil55/cg-legal-rag](https://huggingface.co/spaces/Muzzammil55/cg-legal-rag)
 
-A legal research assistant for Indian central law and Chhattisgarh state law. Ask a question in plain English, get a cited answer from indexed statutes and High Court judgments. Or enter a fact pattern and see a structured simulation of how a Chhattisgarh court might reason through it.
+A legal research assistant for Indian central law and Chhattisgarh state law. Ask a question in plain English to get cited answers, or enter a complex fact pattern to simulate a courtroom's legal reasoning.
 
-Built end-to-end: data collection → extraction → chunking → embeddings → hybrid retrieval → LLM generation → citation validation → deployment.
-
----
-
-## What It Does
-
-Two modes, one interface:
-
-**Ask a legal question** — Retrieval-augmented question answering with citations.
-> *"What are the grounds for eviction under the Chhattisgarh Rent Control Act?"*
-> → Returns the grounds list from Section 11 with a source citation.
-
-**Simulate case reasoning** — Educational tool for law students.
-> *"A tenant has not paid rent for 8 months. The landlord issued a notice under Section 12..."*
-> → Produces issues, applicable provisions, arguments for both sides, likely reasoning, and a hedged outcome.
-
-Out-of-scope questions return `"Not found in provided context."` — the system refuses rather than hallucinates.
+Built end-to-end: data ingestion -> chunking -> embeddings -> **Multi-Query Hybrid Retrieval** -> LLM generation -> **Quote Verification** -> Dockerized deployment.
 
 ---
 
-## Corpus
+## 🚀 V2 Architecture Upgrades
+
+* **Contextual Chunk Embedding:** Each chunk is prepended with its Act name and Section (e.g., `[Chhattisgarh Rent Control Act] [Section 11]`) before embedding, so the vector represents the Act and section context rather than isolated text.
+* **Stratified Reranking (50/50 Split):** At typical `top_k`, the final context balances Bare Acts (statutes) and Judgments (case law) roughly 50/50, so long High Court judgments are less likely to crowd out statutes.
+* **Multi-Query Reasoning:** For complex fact patterns, an LLM extracts 3–6 distinct legal issues, runs a separate search for each, and merges the results, which reduces the "query dilution" problem.
+* **Quote Verification (anti-hallucination):** The LLM is asked to return the exact text it used. A Python check (`verify_provision_quotes`) drops provisions whose quote cannot be matched to the cited act's retrieved text and regenerates the narrative. This catches many fabrications, but it is an n-gram heuristic, not a proof of correctness.
+* **Neural Retrieval:** Manual `SECTION_HINTS` were removed in favor of neural embeddings and the Cross-Encoder.
+
+---
+
+## 📊 Corpus
 
 | Category | Count |
 |----------|-------|
-| Central Acts | 10 |
-| Chhattisgarh Acts | 11 |
-| CG High Court Judgments | 1,576 |
-| **Total documents** | **1,597** |
-| **Total indexed chunks** | **19,034** |
+| Central Acts | 48 |
+| Chhattisgarh Acts | 16 |
+| CG High Court Judgments | 2,576 |
+| **Total documents** | **2,640** |
+| **Total indexed chunks** | **36,019** |
 
-**Central acts:** Constitution of India, IPC, CrPC, Indian Evidence Act, CPC, BNS, BNSS, BSA, PESA Act 1996, Forest Rights Act Rules
-
-**Chhattisgarh acts:** Land Revenue Code 1959, Excise Act 1915, Rent Control Act 2011, Rent Control Adaptation Rules, Municipalities Act 1961, Panchayat Raj Adhiniyam 1993, Tendu Patta Adhiniyam 1964, Vanopaj Adhiniyam 1969, Lok Sewa Guarantee Adhiniyam 2011, Special Courts Act 2015, Agricultural Cattle Preservation Rules 2014
-
-**Judgments:** Chhattisgarh High Court, 2010–2025, sampled via [bharat-courts](https://pypi.org/project/bharat-courts/) from the [Indian High Court Judgments archive](https://registry.opendata.aws/indian-high-court-judgments/).
+Includes criminal law, civil procedure, labour codes (Wages, Social Security), data privacy (DPDP), RERA, consumer protection, and Chhattisgarh state laws.
 
 ---
 
-## Architecture
+## 🏗️ System Architecture
 
-```
-
-User query
-│
-▼
-┌─────────────────────────────────────────┐
-│  Query analysis                          │
-│  • Act-source detection (21 patterns)    │
-│  • Judgment-mode detection (26 triggers) │
-│  • Section extraction (explicit + hints) │
-└─────────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│  Hybrid retrieval                        │
-│  • BM25 (sparse, Porter-stemmed)         │
-│  • MiniLM-L6 dense embeddings (ChromaDB) │
-│  • Reciprocal Rank Fusion (k=60)         │
-│  • Section injection for exact matches   │
-│  • Cross-encoder rerank (ms-marco)       │
-└─────────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│  LLM generation (Groq gpt-oss-120b)      │
-│  • Strict "use only context" prompt      │
-│  • Citation validation                   │
-│  • Provision validation (reasoning mode) │
-│  • Not-found guardrail                   │
-└─────────────────────────────────────────┘
-│
-▼
+User Query
+    │
+    ▼
+[ Query Analysis & Multi-Query Expansion ]
+    │ • Issue extraction via Groq LLM
+    ▼
+[ Hybrid Retrieval (Exhaustive) ]
+    │ • BM25 (sparse, Porter-stemmed)
+    │ • MiniLM-L6 dense embeddings (ChromaDB)
+    │ • Reciprocal Rank Fusion (RRF)
+    ▼
+[ Stratified Reranking ]
+    │ • Split candidates: Acts vs Judgments
+    │ • Cross-Encoder (ms-marco) rerank
+    │ • Enforce 50/50 context split
+    ▼
+[ LLM Generation & Guardrails ]
+    │ • Strict "use only context" prompt
+    │ • N-Gram Quote Verification (anti-hallu)
+    │ • Ranked Multi-Outcome generation
+    ▼
 Cited answer + retrieved chunks
 
-```
-
-### Key Design Decisions
-
-**Act-aware retrieval.** IPC and BNS have nearly identical section wording (e.g., theft, murder). Without filtering, a BNS query retrieves IPC chunks and vice versa. The source filter detects the act from query keywords and restricts the search accordingly.
-
-**Judgment filtering.** Queries like "what have courts said about X" or "case law on Y" are routed to judgments only, ignoring acts. Implemented via a pattern list in `retriever.py`.
-
-**Section hints.** A curated mapping of ~200 common legal phrases to their exact section numbers (e.g., "FIR" → CrPC 154, "grounds for eviction" → CG Rent Control Act 11). When a hint fires, the matching chunk is pinned to rank 1 and bypasses the reranker.
-
-**Citation validation.** Every citation number the LLM returns is checked against the retrieved chunks. Invalid numbers are dropped. The LLM cannot cite a chunk that wasn't retrieved.
-
-**Provision validation (reasoning mode).** Section numbers mentioned inside the reasoning output are checked against retrieved metadata. Hallucinated provisions are dropped with a warning logged.
-
-**Not-found guardrail.** The prompt instructs the LLM to return exactly `"Not found in provided context."` when the answer isn't in the retrieved chunks. Tested on three out-of-scope queries, all passing.
-
-**Query expansion for reasoning.** Plain-English fact patterns are converted to legal terms by the LLM before retrieval. This bridges the vocabulary gap (e.g., "forced himself" → "rape, consent, sexual assault") and improves retrieval from the wrong act (BNSS arrest procedure) to the right one (IPC 376).
-
 ---
 
-## Evaluation
+## 📈 Evaluation Metrics
 
-Two test sets, both in `data/evaluation/`.
+### Retrieval (Strict Bare-Act Matching)
 
-### Act retrieval (47 questions)
+> **Note:** V1 achieved a higher Recall@1 by using hardcoded section hints. V2 uses pure neural retrieval and intentionally surfaces High Court judgments alongside Bare Acts. This lowers strict Recall@1; the trade-off is intended to give the LLM more case-law context for reasoning.
 
 | Metric | Value |
 |--------|-------|
-| recall@1 | 0.841 |
-| recall@3 | 0.955 |
-| **recall@5** | **0.977** |
-| recall@10 | 0.977 |
-| MRR | 0.896 |
-| Not-found tests | 3/3 PASS |
+| recall@1 | 0.414 |
+| recall@3 | 0.500 |
+| recall@5 | 0.621 |
+| recall@10 | 0.621 |
+| MRR | 0.481 |
 
-### Case-law retrieval (20 questions)
+### Generation (20-question sample)
+
+To evaluate the actual answers (not just the retrieval), `evaluate_generation.py` was run on a 20-question sample.
 
 | Metric | Value |
 |--------|-------|
-| Judgment filter trigger rate | 100% |
-| All top-5 are judgments | 100% |
-| Keyword coverage | 95% |
-| **Pass rate** | **95%** |
+| answer_rate | 0.800 |
+| citation_grounding | 0.600 |
+| keyword_coverage | 0.642 |
+| mean_confidence | 0.972 |
+| not_found_accuracy | 3/3 PASS |
 
-Run both:
+**What this means:**
 
-```bash
-python src/evaluation/evaluate.py --skip-notfound
-python src/evaluation/evaluate_case_law.py
-```
-
-Results are written to data/evaluation/results.json and data/evaluation/case_law_results.json.
-
----
-
-Stack
-
-Layer Tool
-PDF extraction PyMuPDF
-Chunking Custom regex (acts by section, judgments by paragraph)
-Embeddings sentence-transformers/all-MiniLM-L6-v2
-Vector store ChromaDB (cosine)
-Sparse retrieval rank_bm25 with Porter stemming
-Reranking cross-encoder/ms-marco-MiniLM-L-6-v2
-LLM Groq (openai/gpt-oss-120b)
-API FastAPI + Pydantic
-UI Gradio
-Storage SQLite (query logs)
-Deployment HuggingFace Spaces (ZeroGPU) + Git LFS
+* **Answer Rate (80%):** The system successfully provided a grounded answer for 16 out of 20 questions.
+* **Not-Found (100%):** On the out-of-domain tests (crypto tax, space mining, jaywalking), the guardrail returned "Not found in provided context."
+* **Citation Grounding (60%):** In 12 out of 20 cases, the system cited the exact bare act section we expected. The other 8 cases fell into two buckets:
+    1. **Refusal (Safe Fallback):** For `ipc_theft_def`, `bns_theft`, `crpc_fir`, and `bnss_fir`, the retriever pulled semantically related provisions but missed the exact definition section. The LLM correctly refused to answer rather than hallucinating.
+    2. **Judgment Citations:** For `const_article21` and `crpc_bail`, the LLM cited a High Court judgment discussing the law rather than the bare act itself, which is a natural byproduct of the 50/50 Stratified Reranking.
 
 ---
 
-Place source documents in:
+## 🛠️ Stack
 
-```
-data/raw/
-├── central_acts/       # Constitution, IPC, BNS, etc.
-├── cg_acts/            # Chhattisgarh state legislation
-└── judgments/          # CG High Court PDFs
-```
-
-Then run the pipeline:
-
-```bash
-python src/ingestion/extract_pdf.py      # PDFs → extracted_text.json
-python src/chunking/chunker.py           # → chunks_v2.jsonl
-python src/embeddings/embed.py           # → ChromaDB
-
-python app_gradio.py                     # Gradio UI
-# or
-python -m uvicorn src.api.app:app --reload   # FastAPI + /docs
-```
-
-Get a free Groq API key at console.groq.com.
+| Layer | Tool |
+|-------|------|
+| PDF extraction | PyMuPDF |
+| Chunking | Custom regex (acts by section, judgments by paragraph) |
+| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
+| Vector store | ChromaDB (cosine) |
+| Sparse retrieval | rank_bm25 with Porter stemming |
+| Reranking | cross-encoder/ms-marco-MiniLM-L-6-v2 |
+| LLM | Groq (openai/gpt-oss-120b) |
+| API | FastAPI + Pydantic |
+| UI | Gradio |
+| Storage | SQLite (query logs) |
+| Deployment | HuggingFace Spaces + Docker |
 
 ---
 
-CLI Usage
+## 🚦 Running Locally
 
-```bash
-python src/generation/generator.py
-```
+    # 1. Install dependencies
+    pip install -r requirements.txt
 
-Choose query for retrieval-augmented answers or reason for the reasoning simulation. Prints structured output to the terminal.
+    # 2. Set up environment variables
+    cp .env.example .env
+    # Add your own GROQ_API_KEY to the .env file
 
----
+    # 3. Build the database (optional, if data is not already cached)
+    python src/ingestion/extract_pdf.py
+    python src/chunking/chunker.py
+    python src/embeddings/embed.py
 
-Limitations
+    # 4. Run the UI
+    python app_gradio.py
 
-Corpus coverage. The judgment corpus is a 1,576-document sample from 2010–2025, not the full archive. It covers common topics (motor accidents, criminal appeals, land disputes) but misses niche areas (rent control eviction at HC level, tribal land disputes). Queries on thin topics return honest "not found" rather than poor answers.
+Optional data-pipeline / training dependencies (classifier training, judgment fetching) are listed in `requirements-dev.txt`.
 
-English only. The embedding model is English-trained. Hindi documents (which exist for some CG excise rules) are not indexed.
+### Docker
 
-Section hints are manual. Every new act requires hand-curated phrase → section mappings. This doesn't scale past a few dozen acts. A production system would use a semantic router.
-
-Reasoning mode is nondeterministic. Temperature 0.2 means the same fact pattern can produce slightly different structures across runs. Acceptable for educational use, not for legal-adjacent production.
-
-Not legal advice. The reasoning tab is an educational simulation. It is not a prediction of any actual case outcome.
-
----
-
-Project Structure
-
-```
-cg_rag/
-├── app_gradio.py                 # Gradio UI (HF Spaces entry point)
-├── data/
-│   ├── raw/                      # Source PDFs (gitignored)
-│   ├── processed/                # chunks_v2.jsonl (tracked via LFS)
-│   ├── vector_db/                # ChromaDB (gitignored)
-│   └── evaluation/               # Eval sets + scripts
-├── src/
-│   ├── api/                      # FastAPI backend
-│   ├── chunking/                 # Section + paragraph chunkers
-│   ├── embeddings/               # Embedding + startup build
-│   ├── evaluation/               # Retrieval metrics
-│   ├── generation/               # LLM prompts + validation
-│   ├── ingestion/                # PDF extraction + judgment fetch
-│   ├── retrieval/                # Hybrid search
-│   └── storage/                  # SQLite logging
-└── requirements.txt
-```
-
-Notes on Deployment
-
-The Space runs on HuggingFace's free ZeroGPU tier. To satisfy the ZeroGPU startup scan (which expects a @spaces.GPU decorated function), a dummy no-op function is registered at the top of app_gradio.py. All computation runs on CPU.
-
-The chunks_v2.jsonl file is ~18 MB and tracked via Git LFS — plain Git rejects files over 10 MB.
-
-Cold start after 48 hours of inactivity takes ~45 seconds (model download + ChromaDB rebuild from chunks_v2.jsonl).
+    docker compose build
+    docker compose up
 
 ---
 
-License
+## 🧪 Testing & Evaluation
 
-MIT
+    # Unit tests — heavy modules are mocked and no network calls are made.
+    # Requires GROQ_API_KEY in .env (the generator builds a client at import time).
+    pip install -r requirements-dev.txt
+    python -m pytest
 
-```
+    # Retrieval metrics: recall@k, MRR, not-found guardrail
+    python src/evaluation/evaluate.py
+
+    # Generation metrics: answer_rate, citation_grounding, keyword_coverage.
+    # Calls the live LLM and uses API quota — cap it with --limit.
+    python src/evaluation/evaluate_generation.py --limit 20
+
+---
+
+## Engineering highlights
+
+1. **Contextual Embeddings:** Prepending metadata to chunk text before vectorization.
+2. **Multi-Query Decomposition:** Splitting a fact pattern into sub-queries, running deep searches, and merging the results.
+3. **Deterministic Guardrails:** Python N-gram matching checks LLM JSON output to catch fabricated legal quotes.
+4. **Dynamic UI Generation:** Gradio generators (`yield`) stream status updates and render complex JSON into Markdown.
+5. **Dockerization:** A CPU-optimized image (torch CPU wheels, model caching) reduces image size from ~5 GB to ~1.8 GB.
+
+---
+
+## ⚠️ Limitations
+
+* **Corpus Coverage:** The judgment corpus is a 2,576-document sample, not the complete Indian Kanoon archive.
+* **Section Matching:** Exhaustive search prioritizes semantic similarity. For highly specific section lookups, it may retrieve a judgment discussing the section rather than the bare section itself.
+* **Not Legal Advice:** This is an educational tool, not a substitute for a licensed attorney.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
